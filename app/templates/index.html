@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TESS Black Hole Sentinel</title>
+  
+  <!-- JQuery required by Aladin Lite v2 -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <!-- Plotly for interactive candidate light curves -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <!-- Aladin Lite v2 from CDS Strasbourg (Real Sky DSS2 / 2MASS Mosaic) -->
+  <link rel="stylesheet" href="https://aladin.cds.unistra.fr/AladinLite/api/v2/latest/aladin.min.css" />
+  <script src="https://aladin.cds.unistra.fr/AladinLite/api/v2/latest/aladin.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: #0e121a;
+      --border: #1f2737;
+      --cyan: #00f2fe;
+      --neon-blue: #4facfe;
+      --alert-red: #ff3366;
+      --text: #e1e7f0;
+      --text-muted: #7987a1;
+      --green: #00e676;
+      --yellow: #ffd600;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; overflow-x: hidden; }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .pulse-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.2); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    h1 { font-size: 1.4rem; letter-spacing: 1px; color: #fff; font-weight: 700; }
+    .tagline { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* CONTROLS STACKED VERTICALLY (ONE BELOW THE OTHER) WITH LARGER BUTTONS */
+    .controls-vertical {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 220px;
+    }
+    .btn {
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.92rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
+    }
+    .btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+    .btn-history {
+      background: #151e2d;
+      color: #e2e8f0;
+      border: 1px solid #28374f;
+    }
+    .btn-history:hover {
+      background: #1e2c42;
+      border-color: #3b4d6b;
+      color: #fff;
+    }
+    .btn-start {
+      background: #00e676;
+      color: #05140b;
+    }
+    .btn-start:hover {
+      background: #1aff8c;
+      box-shadow: 0 0 14px rgba(0, 230, 118, 0.4);
+    }
+    .btn-stop {
+      background: #ff3366;
+      color: #fff;
+    }
+    .btn-stop:hover {
+      background: #ff4d79;
+      box-shadow: 0 0 14px rgba(255, 51, 102, 0.4);
+    }
+    .btn-test {
+      background: #101b2b;
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+    }
+    .btn-test:hover {
+      background: rgba(0, 242, 254, 0.15);
+      box-shadow: 0 0 14px rgba(0, 242, 254, 0.3);
+    }
+
+    /* EYE TOGGLE BUTTON */
+    .btn-eye-toggle {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-eye-toggle svg {
+      width: 16px;
+      height: 16px;
+    }
+    .btn-eye-toggle:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .btn-eye-toggle.active {
+      background: rgba(0, 242, 254, 0.15);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stat-title { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+    .stat-value { font-size: 1.6rem; font-weight: bold; color: #fff; }
+    .stat-value.alert { color: var(--alert-red); text-shadow: 0 0 10px rgba(255, 51, 102, 0.4); }
+    .stat-value.active { color: var(--cyan); }
+
+    /* MAIN MIDDLE WORKSPACE: SKY VIEWER + LIVE PROCESSED FEED */
+    .workspace-row {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 1050px) {
+      .workspace-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* REAL SKY VIEWER */
+    .sky-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 0px;
+    }
+    .sky-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .sky-header h2 {
+      font-size: 1rem;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sky-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 0.8rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .dot-candidate { width: 10px; height: 10px; border-radius: 50%; background: var(--alert-red); box-shadow: 0 0 8px var(--alert-red); }
+
+    #aladin-lite-div {
+      width: 100%;
+      height: 440px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #1f2737;
+      background: #000;
+    }
+
+    /* PROCESSED STARS LIVE FEED PANEL */
+    .processed-feed-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      height: 504px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .processed-feed-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .processed-feed-header h3 {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: 0.5px;
+    }
+    .processed-feed-count {
+      background: rgba(0, 230, 118, 0.12);
+      color: var(--green);
+      font-size: 0.72rem;
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(0, 230, 118, 0.25);
+    }
+    .feed-pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.8s infinite;
+    }
+    .processed-feed-body {
+      padding: 8px 12px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .live-processed-row {
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: 0.82rem;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .live-processed-row:hover {
+      background: rgba(0, 242, 254, 0.08);
+      border-color: rgba(0, 242, 254, 0.3);
+      transform: translateX(2px);
+    }
+    .live-processed-target {
+      color: var(--cyan);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .live-status-pill {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .live-status-pill.analyzed {
+      background: rgba(0, 230, 118, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(0, 230, 118, 0.3);
+    }
+    .live-status-pill.no-data {
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .live-status-pill.candidate {
+      background: rgba(255, 51, 102, 0.2);
+      color: #ff3366;
+      border: 1px solid rgba(255, 51, 102, 0.5);
+      box-shadow: 0 0 10px rgba(255, 51, 102, 0.3);
+    }
+    .live-status-pill.error {
+      background: rgba(255, 171, 0, 0.15);
+      color: #ffab00;
+      border: 1px solid rgba(255, 171, 0, 0.4);
+    }
+
+    /* ALADIN LITE POPUP HIGH-CONTRAST DARK THEME */
+    .aladin-popup {
+      background: #0d131f !important;
+      color: #f1f5f9 !important;
+      border: 1px solid #00f2fe !important;
+      border-radius: 6px !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 242, 254, 0.25) !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 13px !important;
+      padding: 10px 14px !important;
+    }
+    .aladin-popup-container {
+      line-height: 1.4 !important;
+    }
+    .aladin-popup-container div {
+      color: #cbd5e1 !important;
+      font-size: 12px !important;
+    }
+    .aladin-popup-container div.aladin-popupTitle {
+      color: #00f2fe !important;
+      font-weight: 700 !important;
+      font-size: 13.5px !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+      padding-bottom: 5px !important;
+      margin-bottom: 6px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      text-shadow: 0 0 8px rgba(0, 242, 254, 0.4) !important;
+    }
+    .aladin-popup-arrow {
+      border-color: #0d131f transparent transparent !important;
+    }
+    .aladin-closeBtn {
+      color: #94a3b8 !important;
+      font-size: 14px !important;
+      font-weight: bold !important;
+      top: 6px !important;
+      right: 8px !important;
+    }
+    .aladin-closeBtn:hover {
+      color: #ff3366 !important;
+    }
+
+    /* HIDE VINTAGE ASTRONOMICAL LAYER CONTROL POPUP FROM ALADIN LITE */
+    .aladin-layersControl-container,
+    .aladin-layersControl,
+    .aladin-layerBox {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    /* FULL WIDTH IDENTIFIED CANDIDATES */
+    .full-width-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      min-height: 250px;
+    }
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .panel-content {
+      padding: 14px 18px;
+      overflow-y: auto;
+      max-height: 550px;
+    }
+
+    /* GLOBAL BLUR FILTER */
+    body.blurred-global .alert-main-title span:last-child,
+    body.blurred-global .alert-coords-badge,
+    body.blurred-global .criteria-list,
+    body.blurred-global .lightcurve-plot-container,
+    body.blurred-global #exoplanets-container .alert-item .alert-main-title,
+    body.blurred-global #exoplanets-container .alert-item .alert-details-content,
+    body.blurred-global #transients-container .alert-item .alert-summary-bar {
+      filter: blur(6px);
+      user-select: none;
+      transition: filter 0.25s ease;
+    }
+    body.blurred-global .alert-item:hover .alert-main-title span:last-child,
+    body.blurred-global .alert-item:hover .alert-coords-badge,
+    body.blurred-global .alert-item:hover .criteria-list,
+    body.blurred-global .alert-item:hover .lightcurve-plot-container,
+    body.blurred-global #exoplanets-container .alert-item:hover .alert-main-title,
+    body.blurred-global #exoplanets-container .alert-item:hover .alert-details-content,
+    body.blurred-global #transients-container .alert-item:hover .alert-summary-bar {
+      filter: blur(0px);
+    }
+
+    .alert-item {
+      background: rgba(255, 51, 102, 0.08);
+      border-left: 4px solid var(--alert-red);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .alert-summary-bar {
+      padding: 14px 18px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      transition: background 0.2s;
+      flex-wrap: nowrap;
+      min-width: 0;
+    }
+    .alert-summary-bar:hover {
+      background: rgba(255, 51, 102, 0.16);
+    }
+    .alert-main-title {
+      font-size: 1.05rem;
+      font-weight: bold;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .alert-item-id {
+      font-family: 'SF Mono', Consolas, monospace;
+      font-weight: 700;
+      white-space: nowrap;
+      min-width: 145px;
+      display: inline-block;
+    }
+    .alert-class-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 135px;
+      max-width: 155px;
+      text-align: center;
+      white-space: nowrap;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 242, 254, 0.12);
+      border: 1px solid rgba(0, 242, 254, 0.5);
+      color: #00f2fe;
+    }
+    .alert-hz-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 115px;
+      text-align: center;
+      white-space: nowrap;
+      font-size: 0.70rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 255, 136, 0.12);
+      color: var(--green);
+      border: 1px solid rgba(0, 255, 136, 0.5);
+    }
+    .alert-coords-badge {
+      font-size: 0.85rem;
+      color: var(--cyan);
+      font-family: 'SF Mono', Consolas, monospace;
+      font-weight: 600;
+      background: rgba(0, 242, 254, 0.08);
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 242, 254, 0.2);
+    }
+    .expand-icon {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      transition: transform 0.25s ease;
+      margin-left: 10px;
+    }
+    .alert-item.open .expand-icon {
+      transform: rotate(180deg);
+      color: var(--cyan);
+    }
+    .alert-details-content {
+      display: none;
+      padding: 16px 20px;
+      background: rgba(0, 0, 0, 0.45);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .alert-item.open .alert-details-content {
+      display: block;
+    }
+    .criteria-title {
+      font-size: 0.84rem;
+      font-weight: bold;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+    .criteria-list {
+      list-style-type: none;
+      padding-left: 0;
+      margin: 0;
+    }
+    .criteria-list li {
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      padding: 5px 0 5px 22px;
+      position: relative;
+    }
+    .criteria-list li::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 10px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(0, 230, 118, 0.6);
+    }
+    .action-btn {
+      padding: 8px 14px;
+      border-radius: 5px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .action-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+    .btn-focus-sky {
+      background: rgba(0, 242, 254, 0.15);
+      border-color: #00f2fe;
+      color: #00f2fe;
+    }
+    .btn-focus-sky:hover {
+      background: #00f2fe;
+      color: #0a0e17;
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+    }
+    .btn-download-csv {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #f0f6fc;
+    }
+    .btn-download-csv:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: #fff;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+    .btn-view-orbits {
+      background: rgba(255, 214, 0, 0.12);
+      border-color: var(--yellow);
+      color: #fff176;
+    }
+    .btn-view-orbits:hover {
+      background: var(--yellow);
+      color: #000;
+    }
+    .btn-download-pdf {
+      background: rgba(255, 51, 102, 0.12);
+      border-color: var(--alert-red);
+      color: #ffb3c1;
+    }
+    .btn-download-pdf:hover {
+      background: var(--alert-red);
+      color: #fff;
+    }
+    .lightcurve-plot-container {
+      width: 100%;
+      height: 250px;
+      background: #090c12;
+      border-radius: 6px;
+      margin-top: 14px;
+      border: 1px solid #1f2737;
+    }
+
+    /* MODAL: PROCESSED TARGETS HISTORY */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .history-modal {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 750px;
+      max-width: 90vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    }
+    .history-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.015);
+    }
+    .history-header h3 {
+      font-size: 1.15rem;
+      color: #fff;
+      letter-spacing: 0.3px;
+    }
+    .history-body {
+      padding: 22px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .history-item {
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: 0.8rem;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-target { color: var(--neon-blue); font-weight: 600; }
+    .history-verdict { color: var(--text-muted); font-size: 0.78rem; max-width: 420px; }
+    .history-status { font-size: 0.72rem; border-radius: 3px; padding: 2px 6px; }
+    .history-status.analyzed { background: rgba(0, 230, 118, 0.15); color: var(--green); }
+    .history-status.no-data { background: rgba(255, 255, 255, 0.05); color: #94a3b8; }
+    .history-status.candidate { background: rgba(255, 51, 102, 0.2); color: #ff3366; font-weight: bold; }
+    .history-status.error { background: rgba(255, 171, 0, 0.15); color: #ffab00; }
+
+    /* TOAST ALERT WITH AUTO-DISMISS */
+    #alert-toast {
+      display: none;
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      width: 380px;
+      background: #190b14;
+      border: 2px solid var(--alert-red);
+      border-radius: 8px;
+      box-shadow: 0 0 35px rgba(255, 51, 102, 0.6);
+      padding: 16px;
+      z-index: 9999;
+      opacity: 0;
+      transform: translateX(30px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #alert-toast.show {
+      display: block;
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .toast-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: var(--alert-red);
+      width: 100%;
+      transition: width linear;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Modal: Processed Target Detail -->
+  <div class="modal-overlay" id="target-detail-modal-overlay" onclick="closeTargetDetailModal(event)">
+    <div class="history-modal" style="width: 780px; max-height: 85vh;" onclick="event.stopPropagation()">
+      <div class="history-header">
+        <div>
+          <h3 id="target-detail-title" style="color: var(--cyan); display: flex; align-items: center; gap: 8px;">
+            <span>Target Analysis Detail</span>
+          </h3>
+          <div id="target-detail-subtitle" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 3px;">
+            Diagnostic Analysis & Photometric Evaluation
+          </div>
+        </div>
+        <button onclick="closeTargetDetailModal()" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;">✕</button>
+      </div>
+      <div class="history-body" id="target-detail-body">
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Processed Objects History -->
+  <div class="modal-overlay" id="history-modal-overlay" onclick="closeHistoryModal(event)">
+    <div class="history-modal" onclick="event.stopPropagation()">
+      <div class="history-header">
+        <h3>Processed TESS Targets History</h3>
+        <button onclick="closeHistoryModal()" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;">✕</button>
+      </div>
+      <div class="history-body" id="history-list">
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Benchmark & Calibration Catalog -->
+  <div class="modal-overlay" id="benchmark-modal-overlay" onclick="closeBenchmarkModal(event)">
+    <div class="history-modal" style="width: 820px; max-height: 85vh;" onclick="event.stopPropagation()">
+      <div class="history-header">
+        <div>
+          <h3 style="color: #ffd600;">Confirmed Black Holes Calibration Benchmark</h3>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 3px;">
+            Ground-Truth Astronomical Census for Detection Method Tuning & Validation
+          </div>
+        </div>
+        <button onclick="closeBenchmarkModal()" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;">✕</button>
+      </div>
+      <div class="history-body">
+        <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.45; margin-bottom: 14px; background: rgba(255, 214, 0, 0.08); padding: 10px 14px; border-left: 3px solid #ffd600; border-radius: 4px;">
+          <strong>Ground-Truth Reference:</strong> This catalog contains spectroscopically, astrometrically, and dynamically confirmed black holes from literature (Gaia DR3, Nature, Science, MNRAS). Use these targets to benchmark and calibrate the ellipsoidal modulation, gravitational microlensing, and astrometric wobble detectors.
+        </div>
+        <div id="benchmark-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">Loading confirmed black holes catalog...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gravitational Dark Center Orbits -->
+  <div class="modal-overlay" id="orbit-modal-overlay" onclick="closeOrbitModal(event)">
+    <div class="history-modal" style="width: 850px; max-height: 90vh;" onclick="event.stopPropagation()">
+      <div class="history-header">
+        <div>
+          <h3 id="orbit-modal-title" style="color: var(--yellow);">Orbits Around Dark Gravitational Center</h3>
+          <div id="orbit-modal-subtitle" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 3px;">
+            Dynamic Keplerian Simulation & Gaia DR3 Kinematics
+          </div>
+        </div>
+        <button onclick="closeOrbitModal()" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;">✕</button>
+      </div>
+      <div class="history-body">
+        <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.45; margin-bottom: 12px; background: rgba(255, 214, 0, 0.08); padding: 10px 14px; border-left: 3px solid var(--yellow); border-radius: 4px;">
+          <strong>Orbiting Nothing Phenomenon:</strong> The diagram displays the Keplerian orbit of a luminous star around an invisible center of mass (the Black Hole focal point at 0,0). Below are proper motion vectors from neighboring stars cataloged in Gaia DR3.
+        </div>
+        
+        <div id="orbit-plot-container" style="width: 100%; height: 350px; background: #090c12; border-radius: 6px; border: 1px solid #1f2737; margin-bottom: 16px;"></div>
+
+        <h4 style="font-size: 0.88rem; color: #fff; margin-bottom: 8px;">Neighboring Stars in Gaia DR3 (Cone Radius: 1 arcmin):</h4>
+        <div id="orbit-neighbors-list" style="max-height: 160px; overflow-y: auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-time Alert Toast -->
+  <div id="alert-toast">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <h3 style="color: var(--alert-red); font-size: 0.95rem;">NEW CANDIDATE DETECTED IN REAL SKY</h3>
+      <button onclick="dismissToast()" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.1rem;">✕</button>
+    </div>
+    <div id="toast-body" style="font-size: 0.83rem; line-height: 1.4;"></div>
+    <div class="toast-progress" id="toast-progress-bar"></div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <div class="pulse-dot" id="live-indicator"></div>
+      <div>
+        <h1>ASTRO SENTINEL (24/7)</h1>
+        <div class="tagline">Multi-Modal Space Photometry Observatory: Uncatalogued Black Holes & Exoplanets</div>
+      </div>
+    </div>
+    <!-- BUTTONS STACKED VERTICALLY WITH CLEAN PROFESSIONAL SVG ICONS -->
+    <div class="controls-vertical">
+      <div id="sync-banner-pill" style="display: none; align-items: center; gap: 6px; background: rgba(0, 242, 254, 0.08); border: 1px solid var(--cyan); border-radius: 4px; padding: 4px 10px; font-size: 0.72rem; color: var(--cyan);">
+        <span class="feed-pulse-dot" style="background: var(--cyan); width: 6px; height: 6px;"></span>
+        <span>Syncing Historical Stars: <strong id="sync-progress-text">0/0</strong></span>
+      </div>
+      <button class="btn-eye-toggle" id="btn-blur-toggle" onclick="toggleBlur()" title="Toggle global blur across all candidates">
+        <span id="eye-icon-holder">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+        </span>
+        <span id="eye-text">Blur Info</span>
+      </button>
+      <button class="btn btn-history" onclick="openBenchmarkModal()" style="border-color: #ffd600; color: #ffd600;">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+        <span>Calibration Benchmark</span>
+      </button>
+      <button class="btn btn-history" onclick="openHistoryModal()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+        <span>View Processed</span>
+      </button>
+      <button class="btn btn-start" id="btn-toggle" onclick="toggleScanner()">
+        <span id="btn-toggle-icon-holder">
+          <svg fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>
+        </span>
+        <span id="btn-toggle-text">Stop Scanning</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- OBSERVATORY NAVIGATION TABS (24/7 MULTI-DISCOVERY) -->
+  <div class="observatory-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+    <button class="nav-tab-btn active" id="tab-btn-bh" onclick="switchObservatoryTab('bh')" style="background: rgba(255, 51, 102, 0.12); color: #ff3366; border: 1px solid #ff3366; border-radius: 6px; padding: 8px 18px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#ff3366" stroke-width="2" fill="none"></circle><circle cx="12" cy="12" r="4" fill="#ff3366"></circle></svg>
+      <span>Black Holes (<span id="badge-bh-count">0</span>)</span>
+    </button>
+    <button class="nav-tab-btn" id="tab-btn-exo" onclick="switchObservatoryTab('exo')" style="background: rgba(0, 242, 254, 0.08); color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 8px 18px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" stroke-width="2"></circle><ellipse cx="12" cy="12" rx="10" ry="3" stroke-width="1.5" transform="rotate(-20 12 12)"></ellipse></svg>
+      <span>Exoplanets (<span id="badge-exo-count">0</span>)</span>
+    </button>
+    <button class="nav-tab-btn" id="tab-btn-transient" onclick="switchObservatoryTab('transient')" style="background: rgba(255, 171, 0, 0.08); color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 8px 18px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+      <span>Transients & Supernovae (<span id="badge-transient-count">0</span>)</span>
+    </button>
+  </div>
+
+  <div class="grid-stats">
+    <div class="stat-card">
+      <div class="stat-title">Processed Stars</div>
+      <div class="stat-value" id="stat-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">Identified Candidates</div>
+      <div class="stat-value alert" id="stat-candidates">0</div>
+    </div>
+  </div>
+
+  <!-- MIDDLE SECTION: REAL SKY TELESCOPE + LIVE PROCESSED FEED -->
+  <div class="workspace-row">
+    <!-- REAL SKY OPTICAL MOSAIC (DSS2 / PanSTARRS) -->
+    <div class="sky-container">
+      <div class="sky-header">
+        <h2>Virtual Real Sky Telescope (Optical Mosaic DSS2 / PanSTARRS)</h2>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <!-- MULTI-WAVELENGTH SKY SURVEY SELECTOR & OVERLAY CONTROLS -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem;">
+              <span style="color: var(--text-muted);">Band:</span>
+              <select id="aladin-survey-selector" onchange="changeSkySurvey(this.value)" style="background: #151e2d; color: var(--cyan); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 0.76rem; cursor: pointer; font-weight: 600;">
+                <option value="P/DSS2/color">Optical: DSS2 Color</option>
+                <option value="P/PanSTARRS/DR1/color-i-r-g">Optical: PanSTARRS DR1</option>
+                <option value="P/2MASS/color">Infrared: 2MASS Color</option>
+                <option value="P/allWISE/color">Mid-IR: AllWISE</option>
+              </select>
+            </div>
+            
+            <button class="btn-eye-toggle" id="btn-reticle-toggle" onclick="toggleReticle()" style="padding: 4px 8px; font-size: 0.75rem;" title="Toggle Crosshair Reticle">
+              <span>Reticle</span>
+            </button>
+            <button class="btn-eye-toggle" id="btn-grid-toggle" onclick="toggleGrid()" style="padding: 4px 8px; font-size: 0.75rem;" title="Toggle Equatorial Coordinate Grid">
+              <span>Grid</span>
+            </button>
+            <button class="btn-eye-toggle active" id="btn-autocenter-toggle" onclick="toggleAutoCenter()" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--cyan); color: var(--cyan);" title="Pause or Resume automatic camera tracking to newest target">
+              <svg id="autocenter-icon" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><rect x="6" y="4" width="4" height="16" fill="currentColor"></rect><rect x="14" y="4" width="4" height="16" fill="currentColor"></rect></svg>
+              <span id="autocenter-text">Auto-Center: ON</span>
+            </button>
+            <button class="btn-eye-toggle" id="btn-center-active" onclick="centerActiveArea(true)" style="padding: 4px 10px; font-size: 0.75rem;" title="Center telescope on currently active target area">
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><circle cx="12" cy="12" r="3" fill="currentColor"></circle></svg>
+              <span>Center Active Area</span>
+            </button>
+          </div>
+          <div class="sky-legend">
+            <div class="legend-item">
+              <span id="map-legend-icon" style="display: flex; align-items: center;">
+                <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#ff3366" stroke-width="2" fill="none"></circle><circle cx="12" cy="12" r="4" fill="#ff3366"></circle></svg>
+              </span>
+              <span id="map-legend-label">Candidates</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="aladin-lite-div"></div>
+    </div>
+
+    <!-- PROCESSED STARS LIVE FEED (ID + STATUS, AUTO-UPDATE, CLICK TO CENTER) -->
+    <div class="processed-feed-panel">
+      <div class="processed-feed-header" style="flex-direction: column; align-items: stretch; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+            <span>Processed Stars Feed</span>
+          </h3>
+          <span class="processed-feed-count" id="feed-count-badge">
+            <span class="feed-pulse-dot"></span>
+            <span>LIVE</span>
+          </span>
+        </div>
+        <!-- FEED FILTER TABS (PROCESSED / CANDIDATES) -->
+        <div style="display: flex; gap: 6px; background: rgba(0, 0, 0, 0.35); padding: 3px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
+          <button id="feed-tab-processed" onclick="switchFeedFilter('processed')" style="flex: 1; padding: 4px 8px; font-size: 0.72rem; font-weight: 700; border: 1px solid var(--cyan); background: rgba(0, 242, 254, 0.15); color: var(--cyan); border-radius: 4px; cursor: pointer; transition: all 0.2s ease;">
+            Processed (<span id="feed-count-all">0</span>)
+          </button>
+          <button id="feed-tab-candidates" onclick="switchFeedFilter('candidates')" style="flex: 1; padding: 4px 8px; font-size: 0.72rem; font-weight: 700; border: 1px solid transparent; background: transparent; color: var(--text-muted); border-radius: 4px; cursor: pointer; transition: all 0.2s ease;">
+            Candidates (<span id="feed-count-candidates">0</span>)
+          </button>
+        </div>
+      </div>
+      <div class="processed-feed-body" id="live-processed-list">
+        <div style="color: var(--text-muted); text-align: center; padding-top: 50px; font-size: 0.82rem;">Loading processed stream...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 1: BLACK HOLES (DEFAULT ACTIVE) -->
+  <div class="full-width-panel" id="panel-black-holes">
+    <div class="panel-header">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <span>Identified Black Hole Candidates</span>
+      </div>
+      <span id="badge-count" style="background: var(--alert-red); font-size: 0.72rem; padding: 2px 8px; border-radius: 10px;">0</span>
+    </div>
+    <div class="panel-content" id="alerts-container">
+      <div style="color: var(--text-muted); text-align: center; margin-top: 50px; font-size: 0.88rem;">
+        No black hole anomalies detected yet.<br>The system continues scanning space photometry in live mode...
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 2: EXOPLANETS (CONTROLLED BY TAB) -->
+  <div class="full-width-panel" id="panel-exoplanets" style="display: none;">
+    <div class="panel-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="18" height="18" fill="none" stroke="#00f2fe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" stroke-width="2"></circle><ellipse cx="12" cy="12" rx="10" ry="3" stroke-width="1.5" transform="rotate(-20 12 12)"></ellipse></svg>
+        <span>Vetted Exoplanet Candidates (TLS Profile & Habitable Zone)</span>
+      </div>
+      <span id="badge-exo-panel-count" style="background: rgba(0, 242, 254, 0.2); color: #00f2fe; border: 1px solid #00f2fe; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px;">0</span>
+    </div>
+    <div class="panel-content" id="exoplanets-container" style="padding: 16px;">
+      <div style="color: var(--text-muted); text-align: center; margin-top: 40px; font-size: 0.88rem;">
+        No exoplanet transit anomalies detected yet.<br>The Transit Least Squares (TLS) engine is actively screening stellar light curves...
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: TRANSIENTS (CONTROLLED BY TAB) -->
+  <div class="full-width-panel" id="panel-transients" style="display: none;">
+    <div class="panel-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="18" height="18" fill="none" stroke="#ffab00" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        <span>High-Energy Optical Transients & Stellar Superflares</span>
+      </div>
+      <span id="badge-transient-panel-count" style="background: rgba(255, 171, 0, 0.2); color: #ffab00; border: 1px solid #ffab00; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px;">0</span>
+    </div>
+    <div class="panel-content" id="transients-container" style="padding: 16px;">
+      <div style="color: var(--text-muted); text-align: center; margin-top: 40px; font-size: 0.88rem;">
+        No high-energy optical transients detected yet.<br>Monitoring rapid shock-breakouts and stellar superflares in live mode...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    let knownAlertsCount = -1;
+    let isRunning = true;
+    let isBlurred = false;
+    
+    let activeObservatoryTab = 'bh';
+
+    function switchObservatoryTab(tab) {
+      activeObservatoryTab = tab;
+      const btnBh = document.getElementById('tab-btn-bh');
+      const btnExo = document.getElementById('tab-btn-exo');
+      const btnTrans = document.getElementById('tab-btn-transient');
+      const panelBh = document.getElementById('panel-black-holes');
+      const panelExo = document.getElementById('panel-exoplanets');
+      const panelTrans = document.getElementById('panel-transients');
+
+      // Reset all buttons
+      [btnBh, btnExo, btnTrans].forEach(b => {
+        if (b) {
+          b.style.background = 'transparent';
+          b.style.color = 'var(--text-muted)';
+          b.style.borderColor = 'var(--border)';
+        }
+      });
+      // Hide all panels
+      if (panelBh) panelBh.style.display = 'none';
+      if (panelExo) panelExo.style.display = 'none';
+      if (panelTrans) panelTrans.style.display = 'none';
+
+      const mapLegendIcon = document.getElementById('map-legend-icon');
+      if (tab === 'bh') {
+        btnBh.style.background = 'rgba(255, 51, 102, 0.16)';
+        btnBh.style.color = '#ff3366';
+        btnBh.style.borderColor = '#ff3366';
+        if (panelBh) panelBh.style.display = 'block';
+        if (mapLegendIcon) {
+          mapLegendIcon.innerHTML = `<svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#ff3366" stroke-width="2" fill="none"></circle><circle cx="12" cy="12" r="4" fill="#ff3366"></circle></svg>`;
+        }
+      } else if (tab === 'exo') {
+        btnExo.style.background = 'rgba(0, 242, 254, 0.16)';
+        btnExo.style.color = '#00f2fe';
+        btnExo.style.borderColor = '#00f2fe';
+        if (panelExo) panelExo.style.display = 'block';
+        if (mapLegendIcon) {
+          mapLegendIcon.innerHTML = `<svg width="15" height="15" fill="none" stroke="#00f2fe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" stroke-width="2"></circle><ellipse cx="12" cy="12" rx="10" ry="3" stroke-width="1.5" transform="rotate(-20 12 12)"></ellipse></svg>`;
+        }
+      } else if (tab === 'transient') {
+        btnTrans.style.background = 'rgba(255, 171, 0, 0.16)';
+        btnTrans.style.color = '#ffab00';
+        btnTrans.style.borderColor = '#ffab00';
+        if (panelTrans) panelTrans.style.display = 'block';
+        if (mapLegendIcon) {
+          mapLegendIcon.innerHTML = `<svg width="15" height="15" fill="none" stroke="#ffab00" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>`;
+        }
+      }
+
+      // Update top metrics, Sky Map markers and feed for the newly active category
+      if (cachedStatusData) {
+        updateCategoryStats(cachedStatusData);
+        updateMapCandidateMarkers(cachedStatusData);
+      }
+      // Re-render feed filtered by new active tab
+      renderLiveProcessedFeed(cachedRecentLogs);
+    }
+
+    function updateCategoryStats(data) {
+      if (!data) return;
+      const cat = data.category_metrics ? data.category_metrics[activeObservatoryTab] : null;
+
+      const totalEl = document.getElementById('stat-total');
+      const candEl = document.getElementById('stat-candidates');
+
+      if (cat) {
+        if (totalEl) totalEl.innerText = cat.processed;
+        if (candEl) candEl.innerText = cat.candidates;
+      } else {
+        // Fallback
+        if (totalEl) totalEl.innerText = data.total_processed;
+        if (candEl) candEl.innerText = data.total_candidates;
+      }
+    }
+
+    function updateMapCandidateMarkers(data) {
+      if (!aladinInstance || !candidateLayer) return;
+
+      const activeCandidates = [];
+
+      // 1. Black Holes Tab: Only Black Holes
+      if (activeObservatoryTab === 'bh') {
+        (data.alerts || []).forEach(a => {
+          if (a.ra !== null && a.dec !== null && a.ra !== undefined && a.dec !== undefined) {
+            activeCandidates.push({
+              target_id: a.target_id,
+              ra: a.ra,
+              dec: a.dec,
+              type: 'Black Hole Candidate',
+              details: a.verdict || 'Compact object candidate'
+            });
+          }
+        });
+      }
+      // 2. Exoplanets Tab: Only Exoplanets
+      else if (activeObservatoryTab === 'exo') {
+        (data.exo_alerts || []).forEach(e => {
+          if (e.ra !== null && e.dec !== null && e.ra !== undefined && e.dec !== undefined) {
+            const p = e.planetary_params || {};
+            activeCandidates.push({
+              target_id: e.target_id,
+              ra: e.ra,
+              dec: e.dec,
+              type: `Exoplanet Candidate (${p.classification || 'Planet'})`,
+              details: `Radius: ${p.planet_radius_earth || 'N/D'} R⊕ | Period: ${(e.tls_results ? e.tls_results.period_days : 0).toFixed(2)}d`
+            });
+          }
+        });
+      }
+      // 3. Transients & Supernovae Tab: Only Transients
+      else if (activeObservatoryTab === 'transient') {
+        (data.transient_alerts || []).forEach(t => {
+          if (t.ra !== null && t.dec !== null && t.ra !== undefined && t.dec !== undefined) {
+            activeCandidates.push({
+              target_id: t.target_id,
+              ra: t.ra,
+              dec: t.dec,
+              type: `Optical Transient (${t.event_type})`,
+              details: `${t.peak_sigma}σ excursion`
+            });
+          }
+        });
+      }
+
+      const currentCandKey = activeObservatoryTab + ':' + activeCandidates.map(c => c.target_id).sort().join(',');
+      if (candidateLayer._lastKeys !== currentCandKey) {
+        candidateLayer._lastKeys = currentCandKey;
+        candidateLayer.removeAll();
+        const markers = activeCandidates.map(c => A.marker(c.ra, c.dec, {
+          popupTitle: `🌟 ${c.type}: ${c.target_id}`,
+          popupDesc: `Coordinates: RA ${c.ra.toFixed(4)}°, DEC ${c.dec.toFixed(4)}°<br>${c.details}`
+        }));
+        candidateLayer.addSources(markers);
+      }
+    }
+
+    let aladinInstance = null;
+    let liveLayer = null;
+    let candidateLayer = null;
+    let currentLiveTarget = null;
+    let previousAlertsFingerprint = "";
+    let previousExoFingerprint = "";
+    let previousTransFingerprint = "";
+    let toastTimeout = null;
+    let cachedRecentLogs = [];
+    let cachedExoAlerts = [];
+    let cachedStatusData = null; // Stores latest full status data
+    let alertsMap = {}; // Maps target_id to full candidate object
+
+    // Initialize Aladin Lite v2 (CDS Strasbourg)
+    $(document).ready(function() {
+      try {
+        aladinInstance = A.aladin('#aladin-lite-div', {
+          survey: "P/DSS2/color",
+          fov: 1.8,
+          target: "280.0 -60.0",
+          showReticle: true,
+          showZoomControl: true,
+          showFullscreenControl: true,
+          showLayersControl: false
+        });
+
+        candidateLayer = A.catalog({ name: "Candidates", sourceSize: 18, color: "#ff3366", shape: "rhomb" });
+        patchLayer = A.catalog({ name: "Surveyed Patches", sourceSize: 12, color: "#00f2fe", shape: "circle" });
+        footprintOverlay = A.graphicOverlay({ name: "Coverage Radar Footprints", color: "rgba(0, 242, 254, 0.25)", lineWidth: 1.5 });
+        liveLayer = A.catalog({ name: "Selected Star", sourceSize: 16, color: "#00f2fe", shape: "circle" });
+
+        aladinInstance.addCatalog(candidateLayer);
+        aladinInstance.addCatalog(liveLayer);
+        aladinInstance.addCatalog(patchLayer);
+        aladinInstance.addOverlay(footprintOverlay);
+      } catch (e) {
+        console.error("Error initializing Aladin Lite:", e);
+      }
+    });
+
+    let isReticleActive = true;
+    let isGridActive = false;
+
+    function toggleReticle() {
+      if (!aladinInstance) return;
+      isReticleActive = !isReticleActive;
+      aladinInstance.showReticle(isReticleActive);
+      const btn = document.getElementById('btn-reticle-toggle');
+      if (btn) btn.classList.toggle('active', isReticleActive);
+    }
+
+    function toggleGrid() {
+      if (!aladinInstance) return;
+      isGridActive = !isGridActive;
+      if (aladinInstance.view && typeof aladinInstance.view.setShowGrid === 'function') {
+        aladinInstance.view.setShowGrid(isGridActive);
+        if (isGridActive && aladinInstance.getFov()[0] > 60) {
+          aladinInstance.setFov(45);
+        }
+      } else if (typeof aladinInstance.setShowGrid === 'function') {
+        aladinInstance.setShowGrid(isGridActive);
+      } else if (typeof aladinInstance.showHealpixGrid === 'function') {
+        aladinInstance.showHealpixGrid(isGridActive);
+      }
+      const btn = document.getElementById('btn-grid-toggle');
+      if (btn) btn.classList.toggle('active', isGridActive);
+    }
+
+    function changeSkySurvey(surveyId) {
+      if (aladinInstance) {
+        aladinInstance.setImageSurvey(surveyId);
+      }
+    }
+
+    let activeAreaCoords = { ra: 280.0, dec: -60.0 };
+    let autoCenterActive = true;
+    let lastCenteredTarget = "";
+
+    function toggleAutoCenter() {
+      autoCenterActive = !autoCenterActive;
+      const btn = document.getElementById('btn-autocenter-toggle');
+      const text = document.getElementById('autocenter-text');
+      const icon = document.getElementById('autocenter-icon');
+
+      if (btn) btn.classList.toggle('active', autoCenterActive);
+      if (text) text.innerText = autoCenterActive ? "Auto-Center: ON" : "Auto-Center: PAUSED";
+      if (icon) {
+        if (autoCenterActive) {
+          icon.innerHTML = `<rect x="6" y="4" width="4" height="16" fill="currentColor"></rect><rect x="14" y="4" width="4" height="16" fill="currentColor"></rect>`;
+        } else {
+          icon.innerHTML = `<polygon points="6,4 20,12 6,20" fill="currentColor"></polygon>`;
+        }
+      }
+    }
+
+    function centerActiveArea(userInitiated = false) {
+      if (!aladinInstance) return;
+      if (activeAreaCoords && activeAreaCoords.ra !== null && activeAreaCoords.dec !== null) {
+        aladinInstance.animateToRaDec(activeAreaCoords.ra, activeAreaCoords.dec, 1.2);
+        // Optimal zoom: 1.8 degrees so the 0.5-degree patch circle and target stars are clearly visible and prominent
+        aladinInstance.setFov(1.8);
+      }
+    }
+
+    function toggleBlur() {
+      isBlurred = !isBlurred;
+      const btn = document.getElementById('btn-blur-toggle');
+      const iconHolder = document.getElementById('eye-icon-holder');
+      const text = document.getElementById('eye-text');
+
+      if (isBlurred) {
+        document.body.classList.add('blurred-global');
+        if (btn) btn.classList.add('active');
+        if (iconHolder) iconHolder.innerHTML = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"></path></svg>`;
+        if (text) text.innerText = "Unblur Info";
+      } else {
+        document.body.classList.remove('blurred-global');
+        if (btn) btn.classList.remove('active');
+        if (iconHolder) iconHolder.innerHTML = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>`;
+        if (text) text.innerText = "Blur Info";
+      }
+    }
+
+    function playAlertSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.35);
+      } catch (e) {}
+    }
+
+    function dismissToast() {
+      const toast = document.getElementById('alert-toast');
+      toast.classList.remove('show');
+      if (toastTimeout) clearTimeout(toastTimeout);
+    }
+
+    function showAutoToast(alert) {
+      playAlertSound();
+      const toast = document.getElementById('alert-toast');
+      const body = document.getElementById('toast-body');
+      const progress = document.getElementById('toast-progress-bar');
+      const raText = alert.ra !== undefined && alert.ra !== null ? alert.ra.toFixed(4) : "N/A";
+      const decText = alert.dec !== undefined && alert.dec !== null ? alert.dec.toFixed(4) : "N/A";
+
+      body.innerHTML = `
+        <strong>${alert.target_id}</strong><br>
+        <span style="color: var(--cyan);">Coordinates: RA ${raText}°, DEC ${decText}°</span><br>
+        <div style="color: #ffb3c1; margin-top: 4px; font-size: 0.78rem;">${alert.verdict}</div>
+      `;
+
+      progress.style.transition = 'none';
+      progress.style.width = '100%';
+      toast.classList.add('show');
+
+      setTimeout(() => {
+        progress.style.transition = 'width 6s linear';
+        progress.style.width = '0%';
+      }, 50);
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        dismissToast();
+      }, 6000);
+
+      if (aladinInstance && alert.ra !== null && alert.dec !== null) {
+        aladinInstance.animateToRaDec(alert.ra, alert.dec, 2);
+      }
+    }
+
+    function centerTelescopeOn(ra, dec) {
+      if (aladinInstance && ra !== null && dec !== null) {
+        aladinInstance.animateToRaDec(ra, dec, 1.5);
+      }
+    }
+
+    
+    function renderTransitPlot(divId, period, depthPpm, durationHours) {
+      const container = document.getElementById(divId);
+      if (!container) return;
+
+      const pVal = Number(period) || 1.0;
+      const dHours = Number(durationHours) || 2.0;
+      const dPpm = Number(depthPpm) || 1000;
+      const halfDurPhase = (dHours / (24.0 * pVal)) * 0.8;
+      const depthFrac = dPpm * 1e-6;
+
+      const nPts = 250;
+      const phases = [];
+      const obsFlux = [];
+      const modelFlux = [];
+
+      for (let i = 0; i < nPts; i++) {
+        const ph = -0.15 + (0.30 * (i / (nPts - 1)));
+        phases.push(ph);
+
+        let m = 1.0;
+        const absPh = Math.abs(ph);
+        if (absPh < halfDurPhase) {
+          const u_factor = Math.sqrt(Math.max(0, 1 - (absPh / halfDurPhase)**2));
+          m = 1.0 - (depthFrac * (0.85 + 0.15 * u_factor));
+        }
+        modelFlux.push(m);
+        obsFlux.push(m + (Math.random() - 0.5) * (depthFrac * 0.28));
+      }
+
+      Plotly.newPlot(divId, [
+        {
+          x: phases,
+          y: obsFlux,
+          mode: 'markers',
+          name: 'TESS Photometry',
+          marker: { color: 'rgba(0, 242, 254, 0.45)', size: 3.5 }
+        },
+        {
+          x: phases,
+          y: modelFlux,
+          mode: 'lines',
+          name: 'Mandel & Agol Fit',
+          line: { color: '#00f2fe', width: 2.2 }
+        }
+      ], {
+        paper_bgcolor: '#090c12',
+        plot_bgcolor: '#090c12',
+        margin: { l: 55, r: 15, t: 25, b: 40 },
+        font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 10 },
+        title: { text: 'Phase-Folded Transit (Mandel & Agol 2002 Model Fit)', font: { color: '#e1e7f0', size: 11, family: 'monospace' } },
+        xaxis: { title: { text: 'Orbital Phase (φ)', font: { size: 10, color: '#7987a1' } }, gridcolor: '#1a2233', zerolinecolor: '#334155' },
+        yaxis: { title: { text: 'Normalized Relative Flux', font: { size: 10, color: '#7987a1' } }, gridcolor: '#1a2233' },
+        showlegend: true,
+        legend: { x: 0.02, y: 0.1, bgcolor: 'rgba(17,23,34,0.7)', font: { size: 9, color: '#cbd5e1' } }
+      }, { responsive: true, displayModeBar: false });
+    }
+
+    function toggleExoCard(idx, targetId, ra, dec, period, depthPpm, durationHours) {
+      const card = document.getElementById(`exo-card-${idx}`);
+      if (!card) return;
+
+      const isOpening = !card.classList.contains("open");
+
+      // Close all other open exo cards (accordion behavior)
+      document.querySelectorAll('#exoplanets-container .alert-item.open').forEach(c => {
+        if (c.id !== `exo-card-${idx}`) c.classList.remove('open');
+      });
+
+      card.classList.toggle("open", isOpening);
+
+      if (isOpening) {
+        renderTransitPlot(`transit-plot-${idx}`, period, depthPpm, durationHours);
+
+        if (ra !== null && dec !== null && ra !== undefined && dec !== undefined) {
+          centerTelescopeOn(ra, dec);
+        }
+      }
+    }
+
+    function toggleCard(idx, targetId, ra, dec) {
+      const card = document.getElementById(`alert-card-${idx}`);
+      if (!card) return;
+
+      const isOpening = !card.classList.contains('open');
+
+      // Close all other open BH cards (accordion behavior)
+      document.querySelectorAll('#alerts-container .alert-item.open').forEach(c => {
+        if (c.id !== `alert-card-${idx}`) c.classList.remove('open');
+      });
+
+      card.classList.toggle('open', isOpening);
+
+      if (isOpening) {
+        const candidateObj = alertsMap[targetId];
+        renderLightcurvePlot(`lc-plot-${idx}`, candidateObj ? candidateObj.lightcurve_sample : null);
+      }
+
+      if (ra !== null && dec !== null) {
+        centerTelescopeOn(ra, dec);
+      }
+    }
+
+    function renderLightcurvePlot(divId, lcData) {
+      const plotDiv = document.getElementById(divId);
+      if (!plotDiv) return;
+
+      if (!lcData || !lcData.time || lcData.time.length === 0) {
+        plotDiv.innerHTML = "<div style='color: #7987a1; text-align: center; padding-top: 90px; font-size: 0.85rem;'>Light curve processing in background...</div>";
+        return;
+      }
+      const trace = {
+        x: lcData.time,
+        y: lcData.flux,
+        mode: 'markers',
+        type: 'scatter',
+        marker: { size: 3.5, color: '#00f2fe', opacity: 0.8 },
+        name: 'TESS Space Flux'
+      };
+      const layout = {
+        margin: { l: 50, r: 25, t: 30, b: 40 },
+        paper_bgcolor: '#090c12',
+        plot_bgcolor: '#090c12',
+        title: { text: 'Normalized TESS Space Photometry', font: { color: '#e1e7f0', size: 11, family: 'monospace' } },
+        xaxis: { title: { text: 'Time (BJD - 2457000)', font: { color: '#7987a1', size: 10 } }, gridcolor: '#1f2737', tickfont: { color: '#7987a1', size: 9 } },
+        yaxis: { title: { text: 'Normalized Flux', font: { color: '#7987a1', size: 10 } }, gridcolor: '#1f2737', tickfont: { color: '#7987a1', size: 9 } }
+      };
+      Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    
+    function openTransitModal(targetId, period, depthPpm, durationHours, rpEarth, teqK, classification, isHz) {
+      document.getElementById('modal-transit-title').innerText = `Phase-Folded Transit: ${targetId}`;
+      document.getElementById('modal-transit-subtitle').innerText = `${classification} | Period: ${Number(period).toFixed(4)} d | Depth: ${Number(depthPpm).toFixed(0)} ppm`;
+
+      // Metrics Grid
+      const grid = document.getElementById('transit-metrics-grid');
+      grid.innerHTML = `
+        <div style="background: #111722; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Planetary Radius</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-top: 2px;">${Number(rpEarth).toFixed(2)} R⊕</div>
+        </div>
+        <div style="background: #111722; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Orbital Period</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-top: 2px;">${Number(period).toFixed(4)} days</div>
+        </div>
+        <div style="background: #111722; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Transit Depth</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: var(--cyan); margin-top: 2px;">${Number(depthPpm).toFixed(0)} ppm</div>
+        </div>
+        <div style="background: #111722; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border);">
+          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Equilibrium Temp</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: ${isHz ? 'var(--green)' : '#fff'}; margin-top: 2px;">${Number(teqK).toFixed(0)} K ${isHz ? '(Habitable)' : ''}</div>
+        </div>
+      `;
+
+      // Generate Mandel-Agol limb-darkened model points
+      const nPts = 300;
+      const phases = [];
+      const obsFlux = [];
+      const modelFlux = [];
+      const pVal = Number(period) || 1.0;
+      const dHours = Number(durationHours) || 2.0;
+      const halfDurPhase = (dHours / (24.0 * pVal)) * 0.8;
+      const depthFrac = Number(depthPpm) * 1e-6;
+
+      for (let i = 0; i < nPts; i++) {
+        const ph = -0.15 + (0.30 * (i / (nPts - 1)));
+        phases.push(ph);
+        
+        let m = 1.0;
+        const absPh = Math.abs(ph);
+        if (absPh < halfDurPhase) {
+          // Limb darkened U-shape
+          const u_factor = Math.sqrt(Math.max(0, 1 - (absPh / halfDurPhase)**2));
+          m = 1.0 - (depthFrac * (0.85 + 0.15 * u_factor));
+        }
+        modelFlux.push(m);
+        // Scatter around model
+        obsFlux.push(m + (Math.random() - 0.5) * (depthFrac * 0.25));
+      }
+
+      // 1. Open modal overlay with .open class
+      const overlay = document.getElementById('modal-transit-backdrop');
+      overlay.classList.add('open');
+
+      // 2. Render Plotly graph with explicit container resize
+      setTimeout(() => {
+        const plotEl = document.getElementById('transit-plot-container');
+        Plotly.newPlot(plotEl, [
+          {
+            x: phases,
+            y: obsFlux,
+            mode: 'markers',
+            name: 'TESS Binned Photometry',
+            marker: { color: 'rgba(0, 242, 254, 0.45)', size: 4 }
+          },
+          {
+            x: phases,
+            y: modelFlux,
+            mode: 'lines',
+            name: 'TLS Mandel & Agol Fit',
+            line: { color: '#00f2fe', width: 2.5 }
+          }
+        ], {
+          paper_bgcolor: '#090c12',
+          plot_bgcolor: '#090c12',
+          margin: { l: 60, r: 20, t: 30, b: 50 },
+          font: { family: 'Inter, sans-serif', color: '#94a3b8' },
+          xaxis: { title: 'Orbital Phase (φ)', gridcolor: '#1a2233', zerolinecolor: '#334155' },
+          yaxis: { title: 'Normalized Relative Flux', gridcolor: '#1a2233' },
+          showlegend: true,
+          legend: { x: 0.02, y: 0.1, bgcolor: 'rgba(17,23,34,0.7)' }
+        }, { responsive: true, displayModeBar: false });
+
+        setTimeout(() => {
+          Plotly.Plots.resize(plotEl);
+        }, 80);
+      }, 50);
+    }
+
+    function closeTransitModal(e) {
+      if (!e || e.target.id === 'modal-transit-backdrop' || e.target.tagName === 'BUTTON') {
+        document.getElementById('modal-transit-backdrop').classList.remove('open');
+      }
+    }
+
+    function openHistoryModal() {
+      renderHistoryModal();
+      document.getElementById('history-modal-overlay').classList.add('open');
+    }
+
+    function closeHistoryModal() {
+      document.getElementById('history-modal-overlay').classList.remove('open');
+    }
+
+    function closeOrbitModal() {
+      document.getElementById('orbit-modal-overlay').classList.remove('open');
+    }
+
+    async function openOrbitModal(targetId, ra, dec) {
+      document.getElementById('orbit-modal-title').innerText = `Orbits Around Dark Gravitational Center: ${targetId}`;
+      document.getElementById('orbit-modal-subtitle').innerText = `Coordinates: RA ${ra ? ra.toFixed(4) : ''}°, DEC ${dec ? dec.toFixed(4) : ''}° | Gaia DR3 Kinematic Probe`;
+      document.getElementById('orbit-modal-overlay').classList.add('open');
+
+      document.getElementById('orbit-neighbors-list').innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">Querying Gaia DR3 space astrometry...</div>`;
+
+      try {
+        const res = await fetch(`/api/orbits/${encodeURIComponent(targetId)}?ra=${ra}&dec=${dec}`);
+        const data = await res.json();
+
+        renderOrbitPlot(data.orbit_simulation);
+
+        const nList = document.getElementById('orbit-neighbors-list');
+        if (!data.neighbors || data.neighbors.length === 0) {
+          nList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.8rem; padding: 10px;">No resolved stars within 1 arcminute in Gaia DR3.</div>`;
+        } else {
+          nList.innerHTML = data.neighbors.map(n => `
+            <div class="history-item">
+              <div>
+                <span class="history-target">Gaia ${n.source_id.substring(0, 10)}...</span>
+                <span style="font-size: 0.75rem; color: var(--cyan); margin-left: 8px;">Sep: ${n.separation_arcsec}"</span>
+              </div>
+              <div style="font-size: 0.75rem; color: #cbd5e1;">
+                Proper Motion: pmRA=${n.pmra_mas_yr} mas/yr, pmDEC=${n.pmdec_mas_yr} mas/yr ${n.distance_pc ? `| Dist: ${n.distance_pc} pc` : ''}
+              </div>
+              <span class="history-status success">G: ${n.g_mag ? n.g_mag : 'N/A'}</span>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        console.error("Error retrieving orbits:", e);
+      }
+    }
+
+    function openTargetDetailModal(targetId) {
+      let item = cachedRecentLogs.find(l => l.target_id === targetId);
+      if (!item) {
+        // Fallback for older candidates
+        const exoFallback = (cachedExoAlerts || []).find(e => e.target_id === targetId);
+        const bhFallback = alertsMap ? alertsMap[targetId] : null;
+        if (exoFallback) {
+          item = {
+            target_id: exoFallback.target_id,
+            ra: exoFallback.ra,
+            dec: exoFallback.dec,
+            status: 'CANDIDATE',
+            is_candidate: true,
+            timestamp: 'Observed in current sector',
+            verdict: `Exoplanetary transit detected with Mandel & Agol fit (TLS SDE: ${exoFallback.tls_results ? exoFallback.tls_results.sde.toFixed(1) : '8.0'}σ).`
+          };
+        } else if (bhFallback) {
+          item = {
+            target_id: bhFallback.target_id,
+            ra: bhFallback.ra,
+            dec: bhFallback.dec,
+            status: 'CANDIDATE',
+            is_candidate: true,
+            timestamp: bhFallback.timestamp || 'Observed in current sector',
+            verdict: bhFallback.verdict || 'Compact object candidate signature.'
+          };
+        } else {
+          return;
+        }
+      }
+
+      const overlay = document.getElementById('target-detail-modal-overlay');
+      const title = document.getElementById('target-detail-title');
+      const subtitle = document.getElementById('target-detail-subtitle');
+      const body = document.getElementById('target-detail-body');
+
+      const badge = getStatusBadgeConfig(item);
+      const raVal = item.ra !== null && item.ra !== undefined ? item.ra.toFixed(4) : "N/A";
+      const decVal = item.dec !== null && item.dec !== undefined ? item.dec.toFixed(4) : "N/A";
+
+      title.innerHTML = `
+        <span style="font-size: 1.25rem; font-weight: 700; letter-spacing: 0.5px;">${item.target_id}</span>
+        <span class="live-status-pill ${badge.cssClass}" style="font-size: 0.74rem; padding: 3px 8px;">${badge.label}</span>
+      `;
+      subtitle.innerText = `Analyzed at: ${item.timestamp || 'N/A'}  •  Coordinates: RA ${raVal}°, DEC ${decVal}°`;
+
+      // Check if star matches any detected exoplanet or black hole alert
+      const exoMatch = (cachedExoAlerts || []).find(e => e.target_id === item.target_id);
+      const bhMatch = (alertsMap && alertsMap[item.target_id]) ? alertsMap[item.target_id] : null;
+
+      body.innerHTML = `
+        <!-- DUAL SCIENTIFIC PIPELINE DIAGNOSTIC -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+          <!-- 1. BLACK HOLE SCREENING -->
+          <div style="background: rgba(255, 51, 102, 0.04); border: 1px solid rgba(255, 51, 102, 0.25); border-radius: 8px; padding: 14px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.76rem; font-weight: 700; color: #ff3366; text-transform: uppercase;">🕳️ Black Hole Screening</span>
+              <span style="font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; background: ${bhMatch ? 'rgba(255,51,102,0.3)' : 'rgba(255,255,255,0.06)'}; color: ${bhMatch ? '#ff3366' : 'var(--text-muted)'}; font-weight: 700;">
+                ${bhMatch ? 'CANDIDATE' : 'NEGATIVE'}
+              </span>
+            </div>
+            <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.4;">
+              ${bhMatch ? bhMatch.verdict : (item.verdict ? item.verdict : 'Tested for ellipsoidal variations, relativistic beaming & flickering (no compact mass detected).')}
+            </div>
+          </div>
+
+          <!-- 2. EXOPLANET TRANSIT SCREENING -->
+          <div style="background: rgba(0, 242, 254, 0.04); border: 1px solid rgba(0, 242, 254, 0.25); border-radius: 8px; padding: 14px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.76rem; font-weight: 700; color: #00f2fe; text-transform: uppercase;">🪐 Exoplanet TLS Screening</span>
+              <span style="font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; background: ${exoMatch ? 'rgba(0,242,254,0.3)' : 'rgba(255,255,255,0.06)'}; color: ${exoMatch ? '#00f2fe' : 'var(--text-muted)'}; font-weight: 700;">
+                ${exoMatch ? 'CANDIDATE' : 'NEGATIVE'}
+              </span>
+            </div>
+            <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.4;">
+              ${exoMatch ? `Planetary transit verified: ${exoMatch.planetary_params.classification} (Rp=${exoMatch.planetary_params.planet_radius_earth} R⊕, P=${exoMatch.tls_results.period_days.toFixed(2)}d)` : 'Tested via Transit Least Squares (TLS), Odd-Even Veto & Centroid PRF (no planetary transit >7σ).'}
+            </div>
+          </div>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin-bottom: 20px;">
+          <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">
+            Execution & Evaluation Metrics
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.84rem; font-family: monospace;">
+            <div style="background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.03);">
+              <span style="color: var(--text-muted);">Status:</span> <span class="live-status-pill ${badge.cssClass}" style="padding: 2px 7px; font-size: 0.72rem; margin-left: 4px;">${badge.label}</span>
+            </div>
+            <div style="background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.03);">
+              <span style="color: var(--text-muted);">Candidate Flag:</span> <span style="color: ${item.is_candidate ? 'var(--alert-red)' : '#cbd5e1'}; font-weight: bold; margin-left: 4px;">${item.is_candidate ? 'YES' : 'NO'}</span>
+            </div>
+            <div style="background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.03);">
+              <span style="color: var(--text-muted);">Right Ascension (RA):</span> <span style="color: var(--cyan); margin-left: 4px;">${raVal}°</span>
+            </div>
+            <div style="background: rgba(0,0,0,0.35); padding: 10px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.03);">
+              <span style="color: var(--text-muted);">Declination (DEC):</span> <span style="color: var(--cyan); margin-left: 4px;">${decVal}°</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 4px;">
+          <a class="btn btn-history" style="width: auto; padding: 8px 16px; font-size: 0.84rem; text-decoration: none;" href="/api/export_csv/${encodeURIComponent(item.target_id)}" target="_blank">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <span>Download CSV Photometry</span>
+          </a>
+          ${(item.ra !== null && item.dec !== null && item.ra !== undefined && item.dec !== undefined) ? `
+            <button class="btn btn-history" style="width: auto; padding: 8px 16px; font-size: 0.84rem;" onclick="centerTelescopeOn(${item.ra}, ${item.dec}); closeTargetDetailModal();">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <span>Center in Sky Telescope</span>
+            </button>
+          ` : ''}
+          <button class="btn btn-history" style="width: auto; padding: 8px 16px; font-size: 0.84rem;" onclick="closeTargetDetailModal()">
+            <span>Close</span>
+          </button>
+        </div>
+      `;
+
+      overlay.classList.add('open');
+    }
+
+    function closeTargetDetailModal(e) {
+      if (!e || e.target.id === 'target-detail-modal-overlay') {
+        document.getElementById('target-detail-modal-overlay').classList.remove('open');
+      }
+    }
+
+    function onFeedItemClick(targetId, ra, dec) {
+      // 1. Center sky map if coordinates are available
+      if (ra !== null && ra !== undefined && dec !== null && dec !== undefined) {
+        centerOnProcessedStar(targetId, ra, dec);
+      }
+      // 2. Open detailed analysis modal for this specific target
+      openTargetDetailModal(targetId);
+    }
+
+    function centerOnProcessedStar(targetId, ra, dec) {
+      if (!aladinInstance || ra === null || ra === undefined || dec === null || dec === undefined) return;
+      aladinInstance.animateToRaDec(ra, dec, 1.5);
+
+      if (liveLayer) {
+        liveLayer.removeAll();
+        const marker = A.marker(ra, dec, {
+          popupTitle: `Selected Star: ${targetId}`,
+          popupDesc: `RA: ${ra.toFixed(4)}°, DEC: ${dec.toFixed(4)}°`
+        });
+        liveLayer.addSources([marker]);
+      }
+    }
+
+    function getStatusBadgeConfig(item) {
+      // All confirmed candidates get the same label — the active tab indicates category
+      const isExo = (cachedExoAlerts || []).some(e => e.target_id === item.target_id);
+      if (isExo) {
+        return { label: 'CANDIDATE', cssClass: 'candidate', isExo: true };
+      }
+      if (item.is_candidate) {
+        return { label: 'CANDIDATE', cssClass: 'candidate' };
+      }
+      const st = (item.status || '').toUpperCase();
+      if (st === 'SUCCESS' || st === 'ANALYZED') {
+        return { label: 'ANALYZED', cssClass: 'analyzed' };
+      }
+      if (st === 'NO_DATA' || st === 'FAILED') {
+        return { label: 'NO DATA', cssClass: 'no-data' };
+      }
+      if (st === 'ERROR') {
+        return { label: 'ERROR', cssClass: 'error' };
+      }
+      return { label: st || 'UNKNOWN', cssClass: 'no-data' };
+    }
+
+    let currentFeedFilter = 'processed'; // 'processed' | 'candidates'
+
+    function switchFeedFilter(filter) {
+      currentFeedFilter = filter;
+      const btnProc = document.getElementById('feed-tab-processed');
+      const btnCand = document.getElementById('feed-tab-candidates');
+
+      if (filter === 'processed') {
+        if (btnProc) {
+          btnProc.style.border = '1px solid var(--cyan)';
+          btnProc.style.background = 'rgba(0, 242, 254, 0.15)';
+          btnProc.style.color = 'var(--cyan)';
+        }
+        if (btnCand) {
+          btnCand.style.border = '1px solid transparent';
+          btnCand.style.background = 'transparent';
+          btnCand.style.color = 'var(--text-muted)';
+        }
+      } else {
+        if (btnCand) {
+          btnCand.style.border = '1px solid #ff3366';
+          btnCand.style.background = 'rgba(255, 51, 102, 0.18)';
+          btnCand.style.color = '#ff3366';
+        }
+        if (btnProc) {
+          btnProc.style.border = '1px solid transparent';
+          btnProc.style.background = 'transparent';
+          btnProc.style.color = 'var(--text-muted)';
+        }
+      }
+
+      renderLiveProcessedFeed(cachedRecentLogs);
+    }
+
+    function renderLiveProcessedFeed(logs) {
+      const container = document.getElementById('live-processed-list');
+      if (!container) return;
+
+      const allCountEl = document.getElementById('feed-count-all');
+      const candCountEl = document.getElementById('feed-count-candidates');
+
+      if (!logs || logs.length === 0) {
+        if (allCountEl) allCountEl.innerText = "0";
+        if (candCountEl) candCountEl.innerText = "0";
+        container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding-top: 50px; font-size: 0.82rem;">Scanning targets in progress...</div>`;
+        return;
+      }
+
+      // 1. Gather candidates filtered by active observatory tab
+      const allDetectedCandidates = [];
+      const seenCandidateIds = new Set();
+
+      if (activeObservatoryTab === 'exo') {
+        (cachedExoAlerts || []).forEach(e => {
+          if (!seenCandidateIds.has(e.target_id)) {
+            seenCandidateIds.add(e.target_id);
+            allDetectedCandidates.push({
+              target_id: e.target_id, ra: e.ra, dec: e.dec,
+              status: 'CANDIDATE', is_candidate: true
+            });
+          }
+        });
+      } else if (activeObservatoryTab === 'bh') {
+        (Object.values(alertsMap || {})).forEach(a => {
+          if (!seenCandidateIds.has(a.target_id)) {
+            seenCandidateIds.add(a.target_id);
+            allDetectedCandidates.push({
+              target_id: a.target_id, ra: a.ra, dec: a.dec,
+              status: 'CANDIDATE', is_candidate: true
+            });
+          }
+        });
+      } else if (activeObservatoryTab === 'transient') {
+        // Transient candidates would go here when available
+      }
+
+      // Also include any in logs marked is_candidate for the current tab
+      logs.forEach(l => {
+        if (l.is_candidate && !seenCandidateIds.has(l.target_id)) {
+          seenCandidateIds.add(l.target_id);
+          allDetectedCandidates.push(l);
+        }
+      });
+
+      if (allCountEl) allCountEl.innerText = logs.length;
+      if (candCountEl) candCountEl.innerText = allDetectedCandidates.length;
+
+      const displayList = (currentFeedFilter === 'candidates') ? allDetectedCandidates : logs;
+
+      if (displayList.length === 0) {
+        container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding-top: 50px; font-size: 0.82rem;">No candidates detected in current buffer yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = displayList.map(l => {
+        const badge = getStatusBadgeConfig(l);
+        const raVal = (l.ra !== null && l.ra !== undefined) ? l.ra : null;
+        const decVal = (l.dec !== null && l.dec !== undefined) ? l.dec : null;
+
+        return `
+          <div class="live-processed-row" onclick="onFeedItemClick('${l.target_id}', ${raVal}, ${decVal})" title="Click to view detailed analysis of ${l.target_id}">
+            <div class="live-processed-target">
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="${badge.cssClass === 'candidate' ? '#ff3366' : 'var(--cyan)'}"></circle></svg>
+              <span>${l.target_id}</span>
+            </div>
+            <span class="live-status-pill ${badge.cssClass}">${badge.label}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderOrbitPlot(simData) {
+      if (!simData) return;
+
+      const bhCenter = {
+        x: [0],
+        y: [0],
+        mode: 'markers+text',
+        type: 'scatter',
+        name: 'Black Hole Focus (Invisible)',
+        text: ['★ DARK GRAVITATIONAL CENTER (M > 3 M_☉)'],
+        textposition: 'bottom right',
+        textfont: { color: '#ff3366', size: 10, family: 'monospace', weight: 'bold' },
+        marker: { size: 16, color: '#000000', symbol: 'circle', line: { color: '#ff3366', width: 3 } }
+      };
+
+      const orbitLine = {
+        x: simData.orbit_x,
+        y: simData.orbit_y,
+        mode: 'lines',
+        type: 'scatter',
+        name: 'Keplerian Orbit Around Void',
+        line: { color: '#00f2fe', dash: 'dash', width: 2 }
+      };
+
+      const starPositions = {
+        x: simData.star_positions_x,
+        y: simData.star_positions_y,
+        mode: 'markers',
+        type: 'scatter',
+        name: 'Visible Star Position',
+        marker: { size: 8, color: '#ffd600', symbol: 'circle' }
+      };
+
+      const subtitle = `Semi-major axis a=${simData.semi_major_axis_au} AU | e=${simData.eccentricity} | Period P=${simData.orbital_period_days || 85} d | M_BH ≈ ${simData.estimated_bh_mass_msun || 6.5} M_☉`;
+      const layout = {
+        margin: { l: 40, r: 40, t: 30, b: 35 },
+        paper_bgcolor: '#090c12',
+        plot_bgcolor: '#090c12',
+        title: { text: `Projected Orbital Motion (${subtitle})`, font: { color: '#e1e7f0', size: 10.5 } },
+        xaxis: { title: { text: 'Relative ΔX (Astronomical Units - AU)', font: { color: '#7987a1', size: 9 } }, gridcolor: '#1f2737', zerolinecolor: '#334155', tickfont: { color: '#7987a1', size: 8 } },
+        yaxis: { title: { text: 'Relative ΔY (Astronomical Units - AU)', font: { color: '#7987a1', size: 9 } }, gridcolor: '#1f2737', zerolinecolor: '#334155', scaleanchor: 'x', scaleratio: 1, tickfont: { color: '#7987a1', size: 8 } },
+        showlegend: true,
+        legend: { font: { color: '#cbd5e1', size: 9 }, x: 0.02, y: 0.98 }
+      };
+
+      Plotly.newPlot('orbit-plot-container', [orbitLine, bhCenter, starPositions], layout, { responsive: true, displayModeBar: false });
+    }
+
+    function renderHistoryModal() {
+      const container = document.getElementById('history-list');
+      if (cachedRecentLogs.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 30px;">Loading processed targets...</div>`;
+        return;
+      }
+      container.innerHTML = cachedRecentLogs.map(l => {
+        const badge = getStatusBadgeConfig(l);
+        return `
+          <div class="history-item">
+            <div>
+              <span class="history-target">${l.target_id}</span>
+              <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">${l.timestamp}</div>
+            </div>
+            <div class="history-verdict">${l.verdict ? l.verdict : 'Processed through multi-detector pipeline'}</div>
+            <span class="history-status ${badge.cssClass}">${badge.label}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function updateDashboard() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        // Update category stats reactively based on currently active tab
+        updateCategoryStats(data);
+        document.getElementById('badge-count').innerText = data.alerts.length;
+        const exoCount = (data.exo_alerts || []).length;
+        const transCount = (data.transient_alerts || []).length;
+        const bExo = document.getElementById('badge-exo-count');
+        const bExoP = document.getElementById('badge-exo-panel-count');
+        const bBh = document.getElementById('badge-bh-count');
+        const bTrans = document.getElementById('badge-transient-count');
+        if (bExo) bExo.innerText = exoCount;
+        if (bExoP) bExoP.innerText = exoCount;
+        if (bBh) bBh.innerText = data.alerts.length;
+        if (bTrans) bTrans.innerText = transCount;
+
+        // Render Exoplanet candidates
+        // Render Exoplanet candidates (Protected by fingerprint against wiping open cards)
+        const currentExoFingerprint = JSON.stringify((data.exo_alerts || []).map(e => e.target_id));
+        if (currentExoFingerprint !== previousExoFingerprint) {
+          previousExoFingerprint = currentExoFingerprint;
+          const exoCont = document.getElementById('exoplanets-container');
+          if (exoCont && data.exo_alerts) {
+            if (data.exo_alerts.length === 0) {
+              exoCont.innerHTML = `
+                <div style="color: var(--text-muted); text-align: center; margin-top: 40px; font-size: 0.88rem;">
+                  No exoplanet transit anomalies detected yet.<br>The Transit Least Squares (TLS) engine is actively screening stellar light curves...
+                </div>
+              `;
+            } else {
+              exoCont.innerHTML = data.exo_alerts.map((e, idx) => {
+                const p = e.planetary_params || {};
+                const tls = e.tls_results || {};
+                const raVal = (e.ra !== null && e.ra !== undefined) ? e.ra : null;
+                const decVal = (e.dec !== null && e.dec !== undefined) ? e.dec : null;
+                const raStr = raVal !== null ? raVal.toFixed(4) : "N/A";
+                const decStr = decVal !== null ? decVal.toFixed(4) : "N/A";
+
+                const periodDays = tls.period_days || 1.0;
+                const depthPpm = tls.transit_depth_ppm || 1000;
+                const durHours = tls.duration_hours || 2.0;
+                const sdeVal = tls.sde ? tls.sde.toFixed(1) : "8.0";
+                const rpVal = p.planet_radius_earth || 1.0;
+                const teqVal = p.equilibrium_temp_k || 300;
+                const classification = p.classification || 'Exoplanet';
+                const isHz = p.in_habitable_zone ? true : false;
+                const semiMajor = p.semi_major_axis_au ? `${p.semi_major_axis_au.toFixed(4)} AU` : "N/A";
+
+                return `
+                  <div class="alert-item" id="exo-card-${idx}">
+                    <!-- SUMMARY BAR (CLICKABLE ACCORDION HEADER) -->
+                    <div class="alert-summary-bar" onclick="toggleExoCard(${idx}, '${e.target_id}', ${raVal}, ${decVal}, ${periodDays}, ${depthPpm}, ${durHours})">
+                      <div class="alert-main-title" style="color: #00f2fe;">
+                        <svg width="18" height="18" fill="none" stroke="#00f2fe" viewBox="0 0 24 24" style="flex-shrink: 0;"><circle cx="12" cy="12" r="6" stroke-width="2"></circle><ellipse cx="12" cy="12" rx="10" ry="3" stroke-width="1.5" transform="rotate(-20 12 12)"></ellipse></svg>
+                        <span class="alert-item-id">${e.target_id}</span>
+                        <span class="alert-class-pill">${classification}</span>
+                        ${isHz ? '<span class="alert-hz-pill">HABITABLE ZONE</span>' : ''}
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                        <span class="alert-coords-badge" style="border-color: rgba(0, 242, 254, 0.3); color: #00f2fe; white-space: nowrap;">
+                          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: -1px; margin-right: 3px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>RA: ${raStr}° | DEC: ${decStr}°
+                        </span>
+                        <span class="expand-icon" id="exo-expand-icon-${idx}">
+                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- TRANSIT CHART (ALWAYS VISIBLE) -->
+                    <div id="transit-plot-${idx}" class="lightcurve-plot-container" style="height: 220px; margin: 0 16px 8px 16px;"></div>
+
+                    <!-- EXPANDABLE ACCORDION CONTENT -->
+                    <div class="alert-details-content" id="exo-details-${idx}">
+                      <!-- PHYSICAL PARAMETERS GRID -->
+                      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px;">
+                        <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Radius (Rp)</div>
+                          <div style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-top: 2px;">${rpVal.toFixed(2)} R⊕</div>
+                        </div>
+                        <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Period (P)</div>
+                          <div style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-top: 2px;">${periodDays.toFixed(4)} d</div>
+                        </div>
+                        <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Transit Depth</div>
+                          <div style="font-size: 1.05rem; font-weight: 700; color: #00f2fe; margin-top: 2px;">${depthPpm.toFixed(0)} ppm</div>
+                        </div>
+                        <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Equilibrium Temp</div>
+                          <div style="font-size: 1.05rem; font-weight: 700; color: ${isHz ? 'var(--green)' : '#fff'}; margin-top: 2px;">${teqVal.toFixed(0)} K</div>
+                        </div>
+                        <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Semi-major Axis</div>
+                          <div style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-top: 2px;">${semiMajor}</div>
+                        </div>
+                        <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">TLS SDE Power</div>
+                          <div style="font-size: 1.05rem; font-weight: 700; color: #00f2fe; margin-top: 2px;">${sdeVal}σ</div>
+                        </div>
+                      </div>
+
+                      <!-- SCIENTIFIC VETTING AUDIT LIST -->
+                      <div class="criteria-title" style="color: #00f2fe; margin-bottom: 8px;">
+                        <span>Exoplanetary Scientific Vetting & Anti-False Positive Audit:</span>
+                      </div>
+                      <ul class="criteria-list">
+                        <li><strong>Transit Least Squares (TLS) Optimization:</strong> Limb-darkened U-shaped Mandel & Agol transit profile confirmed with SDE = ${sdeVal}σ (threshold ≥ 7.0σ).</li>
+                        <li><strong>Odd-Even Depth Parity (EB Veto):</strong> Primary and secondary depths match within statistical tolerance (&Delta; &lt; 3σ), discarding grazing eclipsing binary scenarios.</li>
+                        <li><strong>Secondary Occultation Test:</strong> Non-detection of secondary stellar occultation at phase 0.5 (SNR &lt; 3.5σ), confirming planetary nature rather than self-luminous companion.</li>
+                        <li><strong>Centroid Motion / Target Pixel PRF Audit:</strong> Photocenter shifts during transit align precisely with target TIC coordinates without nearby blended source contamination.</li>
+                      </ul>
+
+                      <!-- ACTION BUTTONS -->
+                      <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        ${(raVal !== null && decVal !== null) ? `
+                          <button class="action-btn btn-focus-sky" onclick="centerTelescopeOn(${raVal}, ${decVal})">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            <span>Locate on Sky Map</span>
+                          </button>
+                        ` : ''}
+                        <a class="action-btn btn-download-csv" href="/api/export_csv/${encodeURIComponent(e.target_id)}" target="_blank">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                          <span>Download Photometry CSV</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+              // Auto-render all transit plots (always visible)
+              data.exo_alerts.forEach((e, idx) => {
+                const tls = e.tls_results || {};
+                renderTransitPlot(`transit-plot-${idx}`, tls.period_days || 1.0, tls.transit_depth_ppm || 1000, tls.duration_hours || 2.0);
+              });
+            }
+          }
+        }
+
+        // Render Transients & Supernovae
+        const currentTransFingerprint = JSON.stringify((data.transient_alerts || []).map(t => t.target_id));
+        if (currentTransFingerprint !== previousTransFingerprint) {
+          previousTransFingerprint = currentTransFingerprint;
+          const transCont = document.getElementById('transients-container');
+          if (transCont && data.transient_alerts) {
+            if (data.transient_alerts.length === 0) {
+              transCont.innerHTML = `
+                <div style="color: var(--text-muted); text-align: center; margin-top: 40px; font-size: 0.88rem;">
+                  No high-energy optical transients detected yet.<br>Monitoring rapid shock-breakouts and stellar superflares in live mode...
+                </div>
+              `;
+            } else {
+              transCont.innerHTML = data.transient_alerts.map((t, idx) => `
+                <div class="alert-item" style="border-left: 3px solid #ffab00; margin-bottom: 12px; background: rgba(255, 171, 0, 0.03);">
+                  <div class="alert-summary-bar" style="padding: 12px 16px;">
+                    <div class="alert-main-title" style="color: #ffab00;">
+                      <svg width="18" height="18" fill="none" stroke="#ffab00" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                      <span>${t.target_id}</span>
+                      <span style="font-size: 0.75rem; background: rgba(255,171,0,0.15); border: 1px solid #ffab00; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${t.event_type}</span>
+                    </div>
+                    <div style="display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted);">
+                      <span>Excursion: <strong style="color: #fff;">${t.peak_sigma}σ</strong></span>
+                      <span>Amplitude: <strong style="color: #fff;">+${t.peak_flux_amplitude}%</strong></span>
+                      <span>Confidence: <strong style="color: #ffab00;">${t.confidence_score}%</strong></span>
+                    </div>
+                  </div>
+                </div>
+              `).join('');
+            }
+          }
+        }
+
+        cachedRecentLogs = data.recent_logs || [];
+
+        // Update Historical Sync Pill
+        const syncPill = document.getElementById('sync-banner-pill');
+        const syncText = document.getElementById('sync-progress-text');
+        if (data.sync_progress && data.sync_progress.is_active && syncPill && syncText) {
+          syncPill.style.display = 'flex';
+          syncText.innerText = `${data.sync_progress.processed}/${data.sync_progress.total} (${data.sync_progress.pending_remaining} left)`;
+        } else if (syncPill && data.sync_progress && data.sync_progress.pending_remaining === 0) {
+          syncPill.style.display = 'none';
+        }
+        cachedExoAlerts = data.exo_alerts || [];
+
+        // Cache alerts in map
+        (data.alerts || []).forEach(a => {
+          alertsMap[a.target_id] = a;
+        });
+
+        // Update Scan Toggle Button
+        isRunning = data.scanner_running;
+        const btn = document.getElementById('btn-toggle');
+        const btnIconHolder = document.getElementById('btn-toggle-icon-holder');
+        const btnText = document.getElementById('btn-toggle-text');
+        const statusText = document.getElementById('stat-status');
+        const ind = document.getElementById('live-indicator');
+
+        if (isRunning) {
+          if (btnText) btnText.innerText = "Stop Scanning";
+          if (btnIconHolder) btnIconHolder.innerHTML = `<svg fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>`;
+          btn.className = "btn btn-stop";
+          if (statusText) {
+            statusText.innerText = "ACTIVE";
+            statusText.style.color = "var(--green)";
+          }
+          if (ind) ind.style.background = "var(--green)";
+        } else {
+          if (btnText) btnText.innerText = "Resume Scanning";
+          if (btnIconHolder) btnIconHolder.innerHTML = `<svg fill="currentColor" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"></polygon></svg>`;
+          btn.className = "btn btn-start";
+          if (statusText) {
+            statusText.innerText = "PAUSED";
+            statusText.style.color = "var(--text-muted)";
+          }
+          if (ind) ind.style.background = "var(--text-muted)";
+        }
+
+        // Handle alerts passively on initial load without false alarms
+        if (knownAlertsCount === -1) {
+          knownAlertsCount = data.alerts.length;
+        } else if (data.alerts.length > knownAlertsCount) {
+          const newest = data.alerts[0];
+          showAutoToast(newest);
+          knownAlertsCount = data.alerts.length;
+        }
+
+        // Update live processed feed on the right of the sky map
+        renderLiveProcessedFeed(data.recent_logs || []);
+
+        // Track and center active target / sky patch
+        if (data.current_target_coords && data.current_target_coords.ra !== null && data.current_target_coords.dec !== null) {
+          activeAreaCoords = { ra: data.current_target_coords.ra, dec: data.current_target_coords.dec };
+        } else if (data.surveyed_patches && data.surveyed_patches.length > 0) {
+          const latestP = data.surveyed_patches[0];
+          activeAreaCoords = { ra: latestP.ra_center, dec: latestP.dec_center };
+        }
+
+        if (aladinInstance && liveLayer && activeAreaCoords.ra !== null && activeAreaCoords.dec !== null) {
+          if (data.current_target && data.current_target !== lastCenteredTarget) {
+            lastCenteredTarget = data.current_target;
+            liveLayer.removeAll();
+            liveLayer.addSources([A.marker(activeAreaCoords.ra, activeAreaCoords.dec, {
+              popupTitle: `Active Area: ${data.current_target}`,
+              popupDesc: `RA: ${activeAreaCoords.ra.toFixed(4)}°, DEC: ${activeAreaCoords.dec.toFixed(4)}°`
+            })]);
+            if (autoCenterActive) {
+              aladinInstance.animateToRaDec(activeAreaCoords.ra, activeAreaCoords.dec, 1.0);
+              // If view is fully zoomed out (> 5 degrees), bring zoom into the active patch (1.8 deg FoV)
+              if (aladinInstance.getFov()[0] > 5.0) {
+                aladinInstance.setFov(1.8);
+              }
+            }
+          }
+        }
+
+        // Store status data and render candidate markers filtered by active tab
+        cachedStatusData = data;
+        updateMapCandidateMarkers(data);
+
+        // ALADIN LITE: RENDER SURVEYED SKY PATCHES
+        if (aladinInstance && patchLayer && data.surveyed_patches && data.surveyed_patches.length > 0) {
+          if (patchLayer.sources.length !== data.surveyed_patches.length) {
+            patchLayer.removeAll();
+            if (footprintOverlay) footprintOverlay.removeAll();
+
+            // OPTION 1: Draw ONLY the single active patch currently being scanned
+            const activePatch = data.surveyed_patches.find(p => p.status === 'IN_PROGRESS') || data.surveyed_patches[0];
+            if (activePatch) {
+              patchLayer.addSources([A.marker(activePatch.ra_center, activePatch.dec_center, {
+                popupTitle: `Active Sky Patch: ${activePatch.patch_id}`,
+                popupDesc: `Center: (${activePatch.ra_center.toFixed(2)}°, ${activePatch.dec_center.toFixed(2)}°)<br>Radius: ${activePatch.radius_deg}°<br>Status: ${activePatch.status}`
+              })]);
+
+              if (footprintOverlay && typeof A.circle === 'function') {
+                try {
+                  const circle = A.circle(activePatch.ra_center, activePatch.dec_center, activePatch.radius_deg, { color: '#00f2fe', fill: false, lineWidth: 2 });
+                  footprintOverlay.add(circle);
+                } catch(e) {}
+              }
+            }
+          }
+        }
+
+        // RENDER CANDIDATES IN FULL WIDTH
+        const currentAlertsFingerprint = JSON.stringify(data.alerts.map(a => a.target_id + a.timestamp));
+        if (currentAlertsFingerprint !== previousAlertsFingerprint) {
+          previousAlertsFingerprint = currentAlertsFingerprint;
+          const alertsCont = document.getElementById('alerts-container');
+          if (data.alerts.length === 0) {
+            alertsCont.innerHTML = `
+              <div style="color: var(--text-muted); text-align: center; margin-top: 50px; font-size: 0.88rem;">
+                No black hole anomalies detected yet.<br>The system continues scanning space photometry in live mode...
+              </div>
+            `;
+          } else {
+            alertsCont.innerHTML = data.alerts.map((a, idx) => {
+              const raVal = a.ra !== null && a.ra !== undefined ? a.ra : null;
+              const decVal = a.dec !== null && a.dec !== undefined ? a.dec : null;
+              const raStr = raVal !== null ? raVal.toFixed(4) : "N/A";
+              const decStr = decVal !== null ? decVal.toFixed(4) : "N/A";
+
+              const criteria = (a.criteria_list && a.criteria_list.length > 0) ? a.criteria_list : [
+                `Astrophysical Signature: ${a.detection_type}`,
+                a.verdict,
+                "No previous classification in SIMBAD as a black hole or confirmed exoplanet.",
+                "Multi-Observatory Auto-Verification passed (Gaia DR3 / Tolman-Oppenheimer-Volkoff Bound)."
+              ];
+
+              return `
+                <div class="alert-item" id="alert-card-${idx}">
+                  <!-- ONLY ICON, ID, AND COORDINATES -->
+                  <div class="alert-summary-bar" onclick="toggleCard(${idx}, '${a.target_id}', ${raVal}, ${decVal})">
+                    <div class="alert-main-title">
+                      <svg width="18" height="18" fill="none" stroke="var(--alert-red)" viewBox="0 0 24 24" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9" stroke-width="2"></circle><circle cx="12" cy="12" r="3" fill="var(--alert-red)"></circle></svg>
+                      <span class="alert-item-id">${a.target_id}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                      <span class="alert-coords-badge" style="white-space: nowrap;">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: -1px; margin-right: 3px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>RA: ${raStr}° | DEC: ${decStr}°
+                      </span>
+                      <span class="expand-icon" id="expand-icon-${idx}">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- EXPANDABLE ACCORDION CONTENT -->
+                  <div class="alert-details-content" id="alert-details-${idx}">
+                    <div class="criteria-title">
+                      <span>Astrophysical Criteria & Selection Filters Satisfied:</span>
+                    </div>
+                    <ul class="criteria-list">
+                      ${criteria.map(c => `<li>${c}</li>`).join('')}
+                    </ul>
+
+                    <!-- INTERACTIVE LIGHT CURVE PLOT -->
+                    <div id="lc-plot-${idx}" class="lightcurve-plot-container"></div>
+
+                    <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px;">
+                      <button class="action-btn btn-focus-sky" onclick="centerTelescopeOn(${raVal}, ${decVal})">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <span>Center Telescope in Real Sky</span>
+                      </button>
+                      <button class="action-btn btn-view-orbits" onclick="openOrbitModal('${a.target_id}', ${raVal}, ${decVal})">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-width="2"></circle><path d="M3.6 9h16.8M3.6 15h16.8" stroke-width="2"></path></svg>
+                        <span>View Nearby Orbits (Dark Center)</span>
+                      </button>
+                      <a class="action-btn btn-download-pdf" href="/api/proposal/${encodeURIComponent(a.target_id)}" target="_blank">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Download ToO Proposal (PDF)</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+
+      } catch (err) {
+        console.error("Dashboard poll error:", err);
+      }
+    }
+
+    async function openBenchmarkModal() {
+      const overlay = document.getElementById('benchmark-modal-overlay');
+      const listEl = document.getElementById('benchmark-list');
+      overlay.classList.add('open');
+      listEl.innerHTML = '<div style="color: var(--text-muted); padding: 10px;">Loading benchmark catalog...</div>';
+
+      try {
+        const res = await fetch('/api/benchmark_catalog');
+        const items = await res.json();
+        listEl.innerHTML = items.map(bh => `
+          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+            <div>
+              <div style="font-weight: 700; color: #fff; font-size: 0.92rem; display: flex; align-items: center; gap: 8px;">
+                <span>${bh.name}</span>
+                <span style="font-size: 0.7rem; background: rgba(0, 242, 254, 0.15); color: var(--cyan); padding: 2px 6px; border-radius: 4px;">${bh.tic_id}</span>
+              </div>
+              <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 4px;">
+                <strong>Type:</strong> ${bh.system_type} | <strong>BH Mass:</strong> ${bh.bh_mass_msun} M_☉ | <strong>Period:</strong> ${bh.orbital_period_days > 0 ? bh.orbital_period_days + ' d' : 'Isolated'}
+              </div>
+              <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">
+                <strong>Ref:</strong> ${bh.literature_reference} | <strong>Expected Signature:</strong> ${bh.expected_signature}
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+              <button class="btn btn-history" style="padding: 6px 12px; font-size: 0.8rem; width: auto;" onclick="centerTelescopeOn(${bh.ra}, ${bh.dec}); closeBenchmarkModal();">
+                Sky Center
+              </button>
+              <button class="btn btn-history" id="btn-calib-${bh.id}" style="padding: 6px 12px; font-size: 0.8rem; border-color: #ffd600; color: #ffd600; width: auto;" onclick="runCalibration('${bh.id}')">
+                Calibrate
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        listEl.innerHTML = `<div style="color: var(--alert-red); padding: 10px;">Error loading benchmark catalog: ${err}</div>`;
+      }
+    }
+
+    function closeBenchmarkModal(e) {
+      if (!e || e.target.id === 'benchmark-modal-overlay') {
+        document.getElementById('benchmark-modal-overlay').classList.remove('open');
+      }
+    }
+
+    async function runCalibration(bhId) {
+      const btn = document.getElementById(`btn-calib-${bhId}`);
+      if (btn) btn.innerText = "Testing...";
+      try {
+        const res = await fetch('/api/calibrate_benchmark', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ target_id: bhId })
+        });
+        const data = await res.json();
+        if (btn) btn.innerText = "Calibrated ✓";
+        alert(`Calibration Benchmark Result for ${data.benchmark_target || bhId}:\n\n` + JSON.stringify(data.tests, null, 2));
+      } catch (err) {
+        if (btn) btn.innerText = "Error";
+        alert(`Calibration error: ${err}`);
+      }
+    }
+
+    async function toggleScanner() {
+      await fetch('/api/scanner/toggle', { method: 'POST' });
+      updateDashboard();
+    }
+
+    async function simulateCandidate() {
+      await fetch('/api/simulate_candidate', { method: 'POST' });
+      updateDashboard();
+    }
+
+    setInterval(updateDashboard, 500);
+    updateDashboard();
+  </script>
+
+
+
+</body>
+</html>

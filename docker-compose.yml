@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  tess-sentinel:
+    build: .
+    container_name: tess_black_hole_sentinel
+    restart: always
+    ports:
+      - "5055:5055"
+    volumes:
+      - ./outputs:/app/outputs
+    env_file:
+      - .env
+    environment:
+      - PORT=5055
