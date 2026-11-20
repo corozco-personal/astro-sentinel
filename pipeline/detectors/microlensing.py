@@ -1,6 +1,6 @@
 """
-Detector de eventos de microlente gravitatoria (Isolated or Binary Black Hole signatures).
-Utiliza el formalismo analítico de Paczyński (1986) y los criterios formales de selección de literatura
+Gravitational microlensing event detector (Isolated or Binary Black Hole signatures).
+Uses the Paczyński (1986) analytical formalism and formal selection criteria from the literature
 (Gould 1992, Mróz et al. 2021, Sahu et al. 2022).
 """
 from typing import Dict, Any, Optional
@@ -10,10 +10,10 @@ import lightkurve as lk
 
 def paczynski_model(t: np.ndarray, t0: float, u0: float, tE: float, f_base: float) -> np.ndarray:
     """
-    Modelo estándar de microlente puntual (Paczyński 1986):
+    Standard point-source microlensing model (Paczyński 1986):
     u(t) = sqrt(u0^2 + ((t - t0) / tE)^2)
     A(u) = (u^2 + 2) / (u * sqrt(u^2 + 4))
-    Flujo = f_base * A(u)
+    Flux = f_base * A(u)
     """
     tau = (t - t0) / np.maximum(tE, 1e-4)
     u = np.sqrt(u0**2 + tau**2)
@@ -30,24 +30,24 @@ class MicrolensingDetector:
 
     def evaluate(self, lc: lk.LightCurve) -> Dict[str, Any]:
         """
-        Aplica los criterios canónicos de literatura para aislar lentes de alta masa (Black Holes):
-        1. Mejora estadística robusta del modelo Paczyński vs modelo plano (Delta_chi2 > 150).
-        2. Test de simetría temporal: |t_rise - t_fall| / tE < 0.25 (descarta erupciones estelares asimétricas/flares).
-        3. tE prolongado (tE > 20 días) representativo de lentes con M > 3-10 M_☉ (Sahu et al. 2022).
-        4. Chi2 reducido del ajuste <= 2.5 (ajuste de calidad física).
+        Applies canonical literature criteria to isolate high-mass lenses (Black Holes):
+        1. Robust statistical improvement of Paczyński model vs flat model (Delta_chi2 > 150).
+        2. Temporal symmetry test: |t_rise - t_fall| / tE < 0.25 (rejects asymmetric stellar flares).
+        3. Prolonged tE (tE > 20 days) representative of lenses with M > 3-10 M_sun (Sahu et al. 2022).
+        4. Reduced chi2 of fit <= 2.5 (physical quality fit).
         """
         time = np.ascontiguousarray(lc.time.value, dtype=float)
         flux = np.ascontiguousarray(lc.flux.value, dtype=float)
         flux_err = np.ascontiguousarray(getattr(lc, 'flux_err', None).value if getattr(lc, 'flux_err', None) is not None else np.ones_like(flux) * 0.005, dtype=float)
-        
+
         valid = np.isfinite(time) & np.isfinite(flux) & (flux_err > 0)
         time, flux, flux_err = time[valid], flux[valid], flux_err[valid]
 
         if len(time) < 80:
-            return {"is_candidate": False, "reason": "Puntos de datos insuficientes"}
+            return {"is_candidate": False, "reason": "Insufficient data points"}
 
-        # Usar percentil bajo para estimar baseline: microlensing solo amplifica,
-        # así que el percentil 15 está libre de contaminación del evento.
+        # Use low percentile to estimate baseline: microlensing only amplifies,
+        # so the 15th percentile is free from event contamination.
         f_base_est = float(np.percentile(flux, 15))
         max_idx = np.argmax(flux)
         t0_est = float(time[max_idx])
@@ -57,12 +57,12 @@ class MicrolensingDetector:
         if peak_amplification < self.min_magnification:
             return {
                 "is_candidate": False,
-                "reason": f"Magnificación pico {peak_amplification:.2f} inferior al umbral {self.min_magnification}",
+                "reason": f"Peak magnification {peak_amplification:.2f} below threshold {self.min_magnification}",
                 "peak_amplification": peak_amplification
             }
 
         u0_est = min(0.9, 1.0 / max(peak_amplification, 1.05))
-        # Estimar tE inicial a partir del ancho a media altura del pico
+        # Estimate initial tE from the full-width at half-maximum of the peak
         half_max = (max_flux + f_base_est) / 2.0
         above_half = time[flux > half_max]
         tE_est = float((above_half.max() - above_half.min()) / 2.0) if len(above_half) > 2 else 35.0
@@ -75,18 +75,17 @@ class MicrolensingDetector:
                 [time.max(), 1.0, self.max_tE, 1.5 * f_base_est]
             )
             popt, _ = curve_fit(paczynski_model, time, flux, p0=p0, bounds=bounds, sigma=flux_err, maxfev=10000)
-            
+
             fit_t0, fit_u0, fit_tE, fit_fbase = popt
             model_flux = paczynski_model(time, *popt)
-            
-            # Chi2 del ajuste vs Chi2 plano
+
+            # Model chi2 vs flat chi2
             chi2_model = float(np.sum(((flux - model_flux) / flux_err)**2))
             chi2_flat = float(np.sum(((flux - f_base_est) / flux_err)**2))
             d_chi2 = chi2_flat - chi2_model
             red_chi2 = chi2_model / max(len(flux) - 4, 1)
 
-            # Test de simetría (Mróz et al. 2021)
-            # Evaluar residuo antes y después de t0
+            # Symmetry test (Mróz et al. 2021)
             pre_t0 = time < fit_t0
             post_t0 = time > fit_t0
             flux_pre = flux[pre_t0]
@@ -100,18 +99,18 @@ class MicrolensingDetector:
                 chi2_post = np.mean((flux_post - model_post)**2)
                 asymmetry_index = abs(chi2_pre - chi2_post) / (chi2_pre + chi2_post + 1e-9)
 
-            # Estimación preliminar de masa de la lente (M_lens ~ theta_E^2 / kappa * pi_rel)
-            # tE > 25d escala típicamente a M > 4-15 M_sun
+            # Preliminary lens mass estimate (M_lens ~ theta_E^2 / kappa * pi_rel)
+            # tE > 25d typically scales to M > 4-15 M_sun
             estimated_mass_solar = (fit_tE / 25.0) ** 2 * 4.0
 
-            # CRITERIOS RIGUROSOS DE LITERATURA CIENTÍFICA:
+            # RIGOROUS SCIENTIFIC LITERATURE CRITERIA:
             is_bh_microlensing = (
                 d_chi2 >= self.min_delta_chi2 and
                 fit_tE >= self.min_tE and
                 red_chi2 <= 3.5 and
                 fit_u0 < 0.75 and
-                asymmetry_index < 0.65 and # Descarta erupciones repentinas asimétricas tipo flare
-                estimated_mass_solar >= 3.0 # Límite de Tolman-Oppenheimer-Volkoff
+                asymmetry_index < 0.65 and  # Rejects asymmetric flare-type eruptions
+                estimated_mass_solar >= 3.0  # Tolman-Oppenheimer-Volkoff limit
             )
 
             return {
@@ -131,6 +130,6 @@ class MicrolensingDetector:
         except Exception as e:
             return {
                 "is_candidate": False,
-                "reason": f"Ajuste Paczyński no convergió: {str(e)}",
+                "reason": f"Paczynski fit did not converge: {str(e)}",
                 "peak_amplification": peak_amplification
             }

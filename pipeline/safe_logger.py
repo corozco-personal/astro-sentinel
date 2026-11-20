@@ -1,6 +1,6 @@
 """
-Logger seguro para entornos concurrentes y procesos desacoplados en segundo plano.
-Previene errores de tipo `ValueError: I/O operation on closed file.` cuando stdout/stderr se cierran.
+Safe logger for concurrent environments and detached background processes.
+Prevents `ValueError: I/O operation on closed file.` when stdout/stderr are closed.
 """
 import sys
 import logging
@@ -11,7 +11,6 @@ LOG_FILE.parent.mkdir(exist_ok=True)
 
 def safe_print(*args, **kwargs):
     text = " ".join(str(a) for a in args)
-    # Intentar escribir a stdout normal
     try:
         if sys.stdout and not sys.stdout.closed:
             print(*args, **kwargs)
@@ -19,8 +18,7 @@ def safe_print(*args, **kwargs):
             return
     except Exception:
         pass
-    
-    # Si stdout está cerrado o falló, guardar en archivo seguro
+
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(text + "\n")

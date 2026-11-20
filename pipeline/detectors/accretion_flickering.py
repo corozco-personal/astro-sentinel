@@ -1,6 +1,6 @@
 """
-Detector de Acreción Turbulenta & Ruido Rojo (Uttley et al. 2005, Heil et al. 2012).
-Evalúa la relación universal lineal RMS-Flujo en discos de acreción alrededor de objetos compactos.
+Turbulent Accretion & Red Noise detector (Uttley et al. 2005, Heil et al. 2012).
+Evaluates the universal linear RMS-Flux relation in accretion disks around compact objects.
 """
 from typing import Dict, Any
 import numpy as np
@@ -13,9 +13,9 @@ class AccretionFlickeringDetector:
 
     def evaluate(self, lc: lk.LightCurve) -> Dict[str, Any]:
         """
-        Segmenta la curva de luz en ventanas temporales para probar la relación RMS-Flujo:
+        Segments the lightcurve into time windows to test the RMS-Flux relation:
         std(F_bin) = k * mean(F_bin) + C
-        En estrellas comunes o ruido blanco, RMS es constante. En acreción de agujeros negros, es estrictamente lineal.
+        In ordinary stars or white noise, RMS is constant. In black hole accretion, it is strictly linear.
         """
         time = np.ascontiguousarray(lc.time.value, dtype=float)
         flux = np.ascontiguousarray(lc.flux.value, dtype=float)
@@ -26,7 +26,7 @@ class AccretionFlickeringDetector:
         if len(time) < 300:
             return {"is_candidate": False, "reason": "Insufficient points for RMS-Flux test"}
 
-        # Dividir en segmentos de ~0.5 días
+        # Split into ~0.5-day segments
         chunk_size = 50
         n_chunks = len(time) // chunk_size
         if n_chunks < 6:
@@ -43,14 +43,14 @@ class AccretionFlickeringDetector:
         mean_fluxes = np.array(mean_fluxes)
         rms_fluxes = np.array(rms_fluxes)
 
-        # Correlación lineal de Pearson entre Flujo Medio y Variabilidad RMS
+        # Pearson linear correlation between Mean Flux and RMS Variability
         if np.std(mean_fluxes) == 0 or np.std(rms_fluxes) == 0:
             return {"is_candidate": False, "reason": "Zero variance in time bins"}
 
         corr = np.corrcoef(mean_fluxes, rms_fluxes)[0, 1]
         var_amplitude = float(np.mean(rms_fluxes) / (np.mean(mean_fluxes) + 1e-9))
 
-        # Criterio: Correlación lineal fuerte (RMS-Flux relation) y variabilidad apreciable
+        # Criterion: strong linear correlation (RMS-Flux relation) and appreciable variability
         is_candidate = (corr >= self.min_corr and var_amplitude >= self.min_var)
 
         return {

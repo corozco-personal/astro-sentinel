@@ -1,6 +1,6 @@
 """
-Filtro Cinemático 3D de Velocidad Peculiar y Empujón Natal de Supernova (Gaia DR3 Astrometry).
-Evalúa si el sistema presenta una velocidad espacial anómala propia de un agujero negro con 'natal kick'.
+3D Kinematic Peculiar Velocity and Supernova Natal Kick Filter (Gaia DR3 Astrometry).
+Evaluates whether the system has an anomalous space velocity characteristic of a black hole with natal kick.
 """
 from typing import Dict, Any, Optional
 import numpy as np
@@ -11,17 +11,15 @@ class KinematicKickAnalyzer:
 
     def evaluate_kinematics(self, pmra: Optional[float], pmdec: Optional[float], parallax_mas: Optional[float], radial_velocity_km_s: Optional[float] = None) -> Dict[str, Any]:
         """
-        Calcula la velocidad tangencial v_tan = 4.74 * (pm / parallax) en km/s:
-        Si v_tan > 65-100 km/s, el objeto es una estrella fugitiva (runaway) con un fuerte impulso natal
-        de supernova asimétrica que expulsó al agujero negro a gran velocidad por el disco galáctico.
+        Calculate tangential velocity v_tan = 4.74 * (pm / parallax) in km/s:
+        If v_tan > 65-100 km/s, the object is a runaway star with a strong natal kick
+        from an asymmetric supernova that ejected the black hole at high velocity through the galactic disk.
         """
         if pmra is None or pmdec is None or parallax_mas is None or parallax_mas <= 0.05:
             return {"kinematics_available": False, "reason": "Insufficient parallax or proper motion in Gaia DR3"}
 
         pm_total = np.sqrt(pmra**2 + pmdec**2)
-        # Distancia en parsecs d = 1000 / parallax
         dist_pc = 1000.0 / parallax_mas
-        # Velocidad tangencial en km/s (fórmula canónica de astrometría 4.74 * mu * d)
         v_tan_km_s = 4.74047 * pm_total / parallax_mas
 
         is_runaway = v_tan_km_s >= self.threshold

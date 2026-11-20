@@ -1849,15 +1849,13 @@
         // Transient candidates would go here when available
       }
 
-      // Also include any in logs marked is_candidate for the current tab
-      logs.forEach(l => {
-        if (l.is_candidate && !seenCandidateIds.has(l.target_id)) {
-          seenCandidateIds.add(l.target_id);
-          allDetectedCandidates.push(l);
-        }
-      });
+      // Note: candidates are already populated from alertsMap/cachedExoAlerts above,
+      // so we do NOT blindly add is_candidate items from logs (they lack category info).
 
-      if (allCountEl) allCountEl.innerText = logs.length;
+      // Show real processed count from category metrics, not the capped log buffer size
+      const catKey = activeObservatoryTab === 'bh' ? 'bh' : activeObservatoryTab === 'exo' ? 'exo' : 'transient';
+      const catMetrics = window._lastCategoryMetrics ? window._lastCategoryMetrics[catKey] : null;
+      if (allCountEl) allCountEl.innerText = catMetrics ? catMetrics.processed : logs.length;
       if (candCountEl) candCountEl.innerText = allDetectedCandidates.length;
 
       const displayList = (currentFeedFilter === 'candidates') ? allDetectedCandidates : logs;
@@ -1959,6 +1957,7 @@
         const data = await res.json();
 
         // Update category stats reactively based on currently active tab
+        window._lastCategoryMetrics = data.category_metrics || null;
         updateCategoryStats(data);
         document.getElementById('badge-count').innerText = data.alerts.length;
         const exoCount = (data.exo_alerts || []).length;
@@ -2024,11 +2023,10 @@
                       </div>
                     </div>
 
-                    <!-- TRANSIT CHART (ALWAYS VISIBLE) -->
-                    <div id="transit-plot-${idx}" class="lightcurve-plot-container" style="height: 220px; margin: 0 16px 8px 16px;"></div>
-
-                    <!-- EXPANDABLE ACCORDION CONTENT -->
+                    <!-- EXPANDABLE ACCORDION CONTENT (transit chart + details) -->
                     <div class="alert-details-content" id="exo-details-${idx}">
+                      <!-- TRANSIT CHART -->
+                      <div id="transit-plot-${idx}" class="lightcurve-plot-container" style="height: 220px; margin: 0 0 12px 0;"></div>
                       <!-- PHYSICAL PARAMETERS GRID -->
                       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px;">
                         <div style="background: #111722; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
@@ -2085,11 +2083,7 @@
                   </div>
                 `;
               }).join('');
-              // Auto-render all transit plots (always visible)
-              data.exo_alerts.forEach((e, idx) => {
-                const tls = e.tls_results || {};
-                renderTransitPlot(`transit-plot-${idx}`, tls.period_days || 1.0, tls.transit_depth_ppm || 1000, tls.duration_hours || 2.0);
-              });
+              // Transit plots render lazily on card open (toggleExoCard)
             }
           }
         }

@@ -1,17 +1,17 @@
 """
-Módulo de Catálogos Oficiales de Agujeros Negros y Binarias Compactas.
-Contiene el censo exhaustivo de los agujeros negros estelares, microcuásares
-y candidatos astrométricos confirmados de la literatura astronómica:
+Official Black Hole and Compact Binary Catalogs.
+Contains the exhaustive census of stellar-mass black holes, microquasars
+and confirmed astrometric candidates from the astronomical literature:
 - BlackCAT: A catalogue of stellar-mass black holes in X-ray transients (Corral-Santana et al. 2016)
 - WATCHDOG: All-sky database of Galactic and Magellanic black hole transients (Tetarenko et al. 2016)
 - Gaia DR3 / DR4 Non-Single Stars: Gaia BH1, Gaia BH2, Gaia BH3
-- Sistemas silenciosos (LB-1, VFTS 243, HD 96670)
+- Quiescent systems (LB-1, VFTS 243, HD 96670)
 """
 from typing import Dict, Any, Optional
 
-# Base de datos exhaustiva de agujeros negros galácticos y binarias de rayos X confirmadas
+# Exhaustive database of Galactic black holes and confirmed X-ray binaries
 OFFICIAL_BLACK_HOLE_REGISTRY = {
-    # Binarias de rayos X clásicas de masa estelar (LMXBs / HMXBs)
+    # Classical stellar-mass X-ray binaries (LMXBs / HMXBs)
     "CYG X-1": {"name": "Cygnus X-1", "type": "HMXB Black Hole", "mass_msun": 21.2, "ra": 299.5903, "dec": 35.2016},
     "CYGNUS X-1": {"name": "Cygnus X-1", "type": "HMXB Black Hole", "mass_msun": 21.2, "ra": 299.5903, "dec": 35.2016},
     "V404 CYG": {"name": "V404 Cygni", "type": "LMXB Microquasar", "mass_msun": 9.0, "ra": 306.0159, "dec": 33.8673},
@@ -34,30 +34,30 @@ OFFICIAL_BLACK_HOLE_REGISTRY = {
     "LMC X-3": {"name": "LMC X-3", "type": "HMXB Black Hole", "mass_msun": 6.98, "ra": 84.7275, "dec": -64.0833},
     "M33 X-7": {"name": "M33 X-7", "type": "HMXB Black Hole", "mass_msun": 15.65, "ra": 23.4621, "dec": 30.7256},
 
-    # Descubrimientos de Agujeros Negros Durmientes / Astrométricos (Gaia)
+    # Dormant / Astrometric Black Hole Discoveries (Gaia)
     "GAIA BH1": {"name": "Gaia DR3 4373465352415301632", "type": "Dormant Black Hole", "mass_msun": 9.62, "ra": 260.6725, "dec": -0.6022},
     "GAIA BH2": {"name": "Gaia DR3 5870569352746779008", "type": "Dormant Black Hole", "mass_msun": 8.9, "ra": 207.7208, "dec": -58.5528},
     "GAIA BH3": {"name": "Gaia DR3 4318465066420528000", "type": "Dormant Massive Black Hole", "mass_msun": 32.7, "ra": 294.1350, "dec": 14.9753},
 
-    # Candidatos y sistemas masivos en discusión o confirmados
+    # Candidates and massive systems under discussion or confirmed
     "VFTS 243": {"name": "VFTS 243", "type": "Dormant Massive Black Hole", "mass_msun": 10.1, "ra": 84.5367, "dec": -69.1764},
     "HD 96670": {"name": "HD 96670", "type": "Dormant Black Hole Candidate", "mass_msun": 6.2, "ra": 166.4258, "dec": -59.7042},
     "LB-1": {"name": "LB-1", "type": "B-star + Compact Object", "mass_msun": 7.0, "ra": 93.3088, "dec": 22.8258},
     "SS 433": {"name": "V1343 Aquilae", "type": "Microquasar Relativistic Jet", "mass_msun": 10.0, "ra": 287.9567, "dec": 4.9828},
-    
-    # Primer agujero negro aislado por microlente confirmado (Hubble 2022)
+
+    # First confirmed isolated microlensed black hole (Hubble 2022)
     "MOA-2011-BLG-191": {"name": "OGLE-2011-BLG-0462", "type": "Isolated Microlensed Black Hole", "mass_msun": 7.1, "ra": 268.0583, "dec": -29.8319},
     "OGLE-2011-BLG-0462": {"name": "MOA-2011-BLG-191", "type": "Isolated Microlensed Black Hole", "mass_msun": 7.1, "ra": 268.0583, "dec": -29.8319}
 }
 
 def is_officially_documented_black_hole(identifier: str, ra: Optional[float] = None, dec: Optional[float] = None, tol_deg: float = 0.01) -> Dict[str, Any]:
     """
-    Verifica si un identificador o coordenada celeste corresponde a un agujero negro
-    ya oficialmente catalogado en la literatura astrofísica mundial.
+    Verify whether an identifier or celestial coordinate corresponds to a black hole
+    already officially cataloged in the global astrophysical literature.
     """
     clean_id = identifier.upper().strip()
 
-    # 1. Comprobación por nombre y alias
+    # 1. Check by name and alias
     for key, data in OFFICIAL_BLACK_HOLE_REGISTRY.items():
         if key in clean_id or clean_id in key:
             return {
@@ -69,7 +69,7 @@ def is_officially_documented_black_hole(identifier: str, ra: Optional[float] = N
                 "coordinates": (data["ra"], data["dec"])
             }
 
-    # 2. Comprobación por proximidad angular en coordenadas celestes (cono de 36 arcsec)
+    # 2. Check by angular proximity in celestial coordinates (36 arcsec cone)
     if ra is not None and dec is not None:
         for key, data in OFFICIAL_BLACK_HOLE_REGISTRY.items():
             dist = ((ra - data["ra"]) ** 2 + (dec - data["dec"]) ** 2) ** 0.5

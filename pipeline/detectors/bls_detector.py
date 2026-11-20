@@ -1,6 +1,6 @@
 """
-Detector Box Least Squares (BLS) para Eclipses Gravitatorios de Discos y Tránsitos (Kovács et al. 2002).
-Detecta tránsitos periódicos de perfil cuadrado producidos por discos de acreción circunestelares.
+Box Least Squares (BLS) detector for gravitational disk eclipses and transits (Kovacs et al. 2002).
+Detects periodic box-shaped transits produced by circumstellar accretion disks.
 """
 from typing import Dict, Any, Optional
 import numpy as np
@@ -23,7 +23,7 @@ class BoxLeastSquaresDetector:
         if len(time) < 250:
             return {"is_candidate": False, "reason": "Insufficient points for BLS"}
 
-        # Submuestreo para optimizar tiempo de cómputo
+        # Subsample to optimize computation time
         if len(time) > 1200:
             step = len(time) // 1200
             time, flux = time[::step], flux[::step]
@@ -44,8 +44,8 @@ class BoxLeastSquaresDetector:
         std_power = float(np.std(periodogram.power))
         snr = (best_power - median_power) / (std_power + 1e-9)
 
-        # Criterio para eclipse profundo de disco compacto:
-        # Profundidad > 0.03 (3%) y SNR > umbral
+        # Criterion for deep compact disk eclipse:
+        # Depth > 0.03 (3%) and SNR > threshold
         is_candidate = (snr >= self.min_snr and 0.02 <= best_depth <= 0.40)
 
         return {

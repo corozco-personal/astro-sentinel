@@ -1,11 +1,11 @@
 """
-Motor de Verificación Automática (Multi-Observatory Auto-Verification Engine).
-Cuando un candidato preliminar es detectado en TESS, este motor consulta inmediatamente
-en línea los archivos astrométricos, espectroscópicos y de altas energías:
-1. Gaia DR3 Astrometry (Exceso de ruido astrométrico / bamboleo de centroide).
-2. HEASARC / Chandra & Swift X-ray Archives (Acreción de rayos X / contraparte compacta).
-3. NASA Exoplanet Archive (Descarte automático de planetas no etiquetados en TESS).
-4. Estimación del Límite de Masa Dinámica (M_min > 3.0 M_sun de Oppenheimer-Volkoff).
+Multi-Observatory Auto-Verification Engine.
+When a preliminary candidate is detected in TESS, this engine immediately queries
+online astrometric, spectroscopic and high-energy archives:
+1. Gaia DR3 Astrometry (Excess astrometric noise / centroid wobble).
+2. HEASARC / Chandra & Swift X-ray Archives (X-ray accretion / compact counterpart).
+3. NASA Exoplanet Archive (Automatic rejection of unlabeled planets in TESS).
+4. Dynamic Mass Limit Estimation (M_min > 3.0 M_sun Oppenheimer-Volkoff).
 """
 from typing import Dict, Any, Optional
 import warnings
@@ -21,8 +21,8 @@ class AutoVerifier:
 
     def run_auto_verification(self, target_id: str, detection: Dict[str, Any], tic_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Ejecuta todas las pruebas automáticas en línea para validar si el candidato
-        es verdaderamente un agujero negro.
+        Run all automated online tests to validate whether the candidate
+        is truly a black hole.
         """
         ra = None
         dec = None
@@ -30,7 +30,7 @@ class AutoVerifier:
             ra = tic_info.get("ra")
             dec = tic_info.get("dec")
 
-        # Si no tenemos coordenadas directas, obtenerlas del catálogo TIC
+        # If we don't have direct coordinates, obtain them from the TIC catalog
         if ra is None or dec is None:
             clean_tic = target_id.replace("TIC", "").strip()
             if clean_tic.isdigit():
@@ -48,50 +48,50 @@ class AutoVerifier:
             "ra": ra,
             "dec": dec,
             "tests": {},
-            "final_score": 0, # Puntuación de 0 a 100 de probabilidad de Agujero Negro real
+            "final_score": 0,
             "status": "UNVERIFIED",
             "verdict": ""
         }
 
         if ra is None or dec is None:
-            verification_result["verdict"] = "No se pudieron obtener coordenadas celestes para verificación cruzada automática."
+            verification_result["verdict"] = "Could not obtain celestial coordinates for automated cross-verification."
             return verification_result
 
         coord = SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
 
-        # Test 1: Verificación Astrométrica en Gaia DR3 (Perturbación Gravitatoria del Centroide)
+        # Test 1: Gaia DR3 Astrometric Verification (Gravitational Centroid Perturbation)
         gaia_test = self._test_gaia_astrometry(coord)
         verification_result["tests"]["gaia_astrometry"] = gaia_test
 
-        # Test 2: Búsqueda de Contraparte en Rayos X (Chandra / Swift XRT en HEASARC)
+        # Test 2: X-ray Counterpart Search (Chandra / Swift XRT in HEASARC)
         xray_test = self._test_xray_counterpart(coord)
         verification_result["tests"]["xray_emission"] = xray_test
 
-        # Test 3: Descarte Riguroso de Falsos Positivos Planetarios o Binarias en Exoplanet Archive
+        # Test 3: Rigorous Planetary / Binary False Positive Rejection via Exoplanet Archive
         exo_test = self._test_exoplanet_archive(target_id)
         verification_result["tests"]["exoplanet_veto"] = exo_test
 
-        # Test 4: Estimación de Masa Mínima según Firma Astrofísica
+        # Test 4: Minimum Mass Estimation from Astrophysical Signature
         mass_test = self._test_mass_estimate(detection, tic_info)
         verification_result["tests"]["mass_estimate"] = mass_test
 
-        # Calcular Score Global de Verificación Automática
+        # Compute Global Auto-Verification Score
         score = 0
         reasons = []
 
         if gaia_test.get("astrometric_wobble_detected"):
             score += 35
-            reasons.append("Bamboleo astrométrico detectable en Gaia DR3 (compañero oscuro masivo perturbando la órbita).")
+            reasons.append("Detectable astrometric wobble in Gaia DR3 (massive dark companion perturbing the orbit).")
 
         if mass_test.get("mass_exceeds_neutron_star_limit"):
             score += 40
-            reasons.append(f"Masa estimada del objeto oscuro ({mass_test.get('estimated_compact_mass_msun', 0):.1f} M_☉) supera el límite de Oppenheimer-Volkoff (>3 M_☉).")
+            reasons.append(f"Estimated dark object mass ({mass_test.get('estimated_compact_mass_msun', 0):.1f} M_sun) exceeds the Oppenheimer-Volkoff limit (>3 M_sun).")
 
         if xray_test.get("has_xray_detection"):
             score += 15
-            reasons.append(f"Contraparte en Rayos X confirmada ({xray_test.get('mission')}), consistente con acreción de materia hacia objeto compacto.")
+            reasons.append(f"X-ray counterpart confirmed ({xray_test.get('mission')}), consistent with matter accretion onto compact object.")
         else:
-            reasons.append("Sin emisión potente en Rayos X, consistente con agujero negro durmiente/aislado (quiescent).")
+            reasons.append("No strong X-ray emission, consistent with dormant/isolated quiescent black hole.")
 
         if not exo_test.get("is_known_false_positive"):
             score += 10
@@ -100,13 +100,13 @@ class AutoVerifier:
 
         if score >= 65:
             verification_result["status"] = "CONFIRMED_STRONG_CANDIDATE"
-            verification_result["verdict"] = f"¡VERIFICADO AUTOMÁTICAMENTE! Alta probabilidad ({score}%): " + " ".join(reasons)
+            verification_result["verdict"] = f"AUTO-VERIFIED! High probability ({score}%): " + " ".join(reasons)
         elif score >= 40:
             verification_result["status"] = "PROBABLE_CANDIDATE"
-            verification_result["verdict"] = f"VERIFICADO MODERADO ({score}%): Candidato consistente, " + " ".join(reasons)
+            verification_result["verdict"] = f"MODERATE VERIFICATION ({score}%): Consistent candidate, " + " ".join(reasons)
         else:
             verification_result["status"] = "INCONCLUSIVE_OR_STELLAR"
-            verification_result["verdict"] = f"VERIFICACIÓN NO CONCLUYENTE ({score}%): Señal débil o compatible con binaria estelar común."
+            verification_result["verdict"] = f"INCONCLUSIVE VERIFICATION ({score}%): Weak signal or compatible with common stellar binary."
 
         return verification_result
 
@@ -117,12 +117,9 @@ class AutoVerifier:
                 return {"match": False, "astrometric_wobble_detected": False}
 
             row = table[0]
-            # Exceso de ruido astrométrico (astrometric_excess_noise > 1.0 mas con alta significancia)
             excess_noise = float(row.get("astrometric_excess_noise", 0.0) or 0.0)
             excess_noise_sig = float(row.get("astrometric_excess_noise_sig", 0.0) or 0.0)
 
-            # Si el exceso de ruido es significativo (> 2 sigma y > 0.5 mas),
-            # indica un bamboleo astrométrico del centroide (unresolved companion / gravitational wobble)
             has_wobble = excess_noise > 0.5 and excess_noise_sig > 2.0
 
             return {
@@ -137,7 +134,7 @@ class AutoVerifier:
             return {"match": False, "error": str(e), "astrometric_wobble_detected": False}
 
     def _test_xray_counterpart(self, coord: SkyCoord) -> Dict[str, Any]:
-        """Consulta archivo Chandra / Swift en HEASARC para ver si hay fuente de rayos X."""
+        """Query Chandra / Swift archive in HEASARC for X-ray source."""
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -169,29 +166,24 @@ class AutoVerifier:
 
     def _test_mass_estimate(self, detection: Dict[str, Any], tic_info: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Estima la masa del objeto compacto para verificar si supera el límite de 3.0 M_☉.
+        Estimate the compact object mass to verify whether it exceeds the 3.0 M_sun limit.
         """
         det_type = detection.get("type", "")
 
-        # 1. Caso Microlente: la masa se escala con tE y velocidad relativa
-        # M_BH ~ (tE / 25 días)^2 * (D_lens / 4 kpc) * (mu / 5 mas/yr)^2 * M_sun
+        # 1. Microlensing case: mass scales with tE and relative velocity
         if "Microlensing" in det_type:
             tE = float(detection.get("tE_days", 25.0))
-            # Para tE prolongados (> 30-50 días), la masa esperada del lente típicamente excede 4-10 M_sun
             estimated_mass = max(3.0, (tE / 28.0) ** 2 * 3.5)
             return {
                 "estimated_compact_mass_msun": float(estimated_mass),
                 "mass_exceeds_neutron_star_limit": bool(estimated_mass >= 3.0),
-                "method": "Einstein Crossing Time Scaling (Paczyński 1986)"
+                "method": "Einstein Crossing Time Scaling (Paczynski 1986)"
             }
 
-        # 2. Caso Modulación Elipsoidal
+        # 2. Ellipsoidal modulation case
         if "Ellipsoidal" in det_type:
             amp = float(detection.get("amplitude_percent", 1.0))
             p_orb = float(detection.get("orbital_period_days", 4.0))
-            # Amplitud elipsoidal: A ~ q * (R_star / a)^3 * sin^2(i)
-            # Para amplitudes del 1% a 4% en periodos de varios días con estrellas normales,
-            # el cociente de masa q = M_BH / M_star suele ser > 1.5 a 4.0
             star_mass = float(tic_info.get("mass", 1.0) or 1.0) if tic_info else 1.0
             estimated_bh_mass = max(2.5, star_mass * (amp / 0.8) ** (1/2))
             return {

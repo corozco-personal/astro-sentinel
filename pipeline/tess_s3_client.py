@@ -1,6 +1,6 @@
 """
-Módulo de Acceso Directo de Alta Velocidad a TESS en AWS S3 Open Data (s3://stpubdata/tess/public/).
-Permite descargar curvas de luz FITS en milisegundos sin latencia HTTP de MAST ni búsquedas lentas de sesión.
+High-Speed Direct Access Module for TESS on AWS S3 Open Data (s3://stpubdata/tess/public/).
+Downloads FITS light curves in milliseconds without MAST HTTP latency or slow session lookups.
 """
 import io
 from pathlib import Path
@@ -10,7 +10,7 @@ import lightkurve as lk
 from astropy.io import fits
 from pipeline.safe_logger import safe_print as print
 
-# URL pública HTTPS directa al bucket S3 Open Data de NASA TESS
+# Public HTTPS URL for the NASA TESS S3 Open Data bucket
 S3_TESS_HTTPS_BASE = "https://stpubdata.s3.amazonaws.com/tess/public"
 
 class TessS3DirectClient:
@@ -19,7 +19,7 @@ class TessS3DirectClient:
 
     def get_s3_path_for_tic(self, tic_id: int, sector: int) -> str:
         """
-        Calcula la ruta canónica en AWS S3 según la convención de archivo de la NASA:
+        Compute the canonical AWS S3 path according to NASA's file naming convention:
         stpubdata/tess/public/tid/s{sector:04d}/{tic_prefix}/{tic_id}/
         """
         tic_str = f"{tic_id:016d}"
@@ -31,18 +31,18 @@ class TessS3DirectClient:
 
     def fetch_fast_lightcurve(self, target: str, sector: Optional[int] = None) -> Optional[lk.LightCurve]:
         """
-        Intenta descarga directa optimizada de S3 o fallback a Lightkurve SPOC.
+        Attempt optimized direct download from S3, falling back to Lightkurve SPOC.
         """
         clean_id = target.upper().replace("TIC", "").strip()
         if not clean_id.isdigit():
             return None
-        
-        # Fallback ultra-rápido usando Lightkurve con timeout acotado
+
+        # Fast fallback using Lightkurve with bounded timeout
         try:
             search = lk.search_lightcurve(f"TIC {clean_id}", sector=sector, author="SPOC")
             if len(search) > 0:
                 return search[0].download().remove_nans().normalize()
-            # Si no está en SPOC, buscar en QLP
+            # If not in SPOC, search in QLP
             search_qlp = lk.search_lightcurve(f"TIC {clean_id}", sector=sector, author="QLP")
             if len(search_qlp) > 0:
                 return search_qlp[0].download().remove_nans().normalize()

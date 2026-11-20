@@ -1,7 +1,6 @@
 """
-Módulo del Pipeline Integrador.
-Coordina la descarga de TESS, evaluación con detectores físicos,
-descarte cruzado con SIMBAD/catálogos oficiales y generación de reportes.
+Integrator Pipeline — coordinates TESS download, physics-based detection,
+cross-match against SIMBAD/official catalogs, and report generation.
 """
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -63,13 +62,13 @@ class BlackHolePipeline:
 
     def analyze_target(self, target_id: str, sector: Optional[int] = None) -> Dict[str, Any]:
         """
-        Ejecuta el ciclo completo de análisis sobre un objetivo astronómico en TESS.
+        Run full analysis cycle on an astronomical target in TESS.
         """
         print(f"\n=======================================================")
-        print(f"[Pipeline] Analizando objetivo: {target_id}")
+        print(f"[Pipeline] Analyzing target: {target_id}")
         print(f"=======================================================")
 
-        # 1. Obtener datos de TESS
+        # 1. Fetch TESS data
         try:
             lc = self.tess_client.fetch_lightcurve(target_id, sector=sector)
         except Exception as e:
@@ -78,45 +77,45 @@ class BlackHolePipeline:
         if lc is None:
             return {"target_id": target_id, "status": "NO_DATA", "reason": "No TESS lightcurve found in MAST archive"}
 
-        # 2. Análisis de Microlente (Paczyński 1986 / Sahu et al. 2022)
-        print("[Pipeline] Evaluando modelo de Microlente Gravitatoria...")
+        # 2. Microlensing analysis (Paczyński 1986 / Sahu et al. 2022)
+        print("[Pipeline] Evaluating Gravitational Microlensing model...")
         micro_res = self.microlensing_detector.evaluate(lc)
 
-        # 3. Consulta de metadatos estelares previos en TIC
+        # 3. Fetch stellar metadata from TIC
         cross_match = self.cross_matcher.check_simbad_and_mast(target_id)
         tic_info = cross_match.get("tic_info", {})
         star_mass = tic_info.get("mass") or 1.0
         star_rad = tic_info.get("rad") or 1.5
 
-        # 4. Análisis de Modulación Elipsoidal (Morris 1985 / Gomel et al. 2021)
-        print("[Pipeline] Evaluando modulación elipsoidal y modelo de Morris...")
+        # 4. Ellipsoidal Modulation (Morris 1985 / Gomel et al. 2021)
+        print("[Pipeline] Evaluating ellipsoidal modulation and Morris model...")
         ellip_res = self.ellipsoidal_detector.evaluate(lc, star_mass=star_mass, star_rad=star_rad)
 
-        # 5. Análisis de Self-Lensing en Binaria (Agol 2002 / Kruse & Agol 2014)
-        print("[Pipeline] Evaluando pulsos de magnificación Self-Lensing...")
+        # 5. Self-Lensing in Binary (Agol 2002 / Kruse & Agol 2014)
+        print("[Pipeline] Evaluating Self-Lensing magnification pulses...")
         self_lens_res = self.self_lensing_detector.evaluate(lc, orbital_period_days=ellip_res.get("orbital_period_days"))
 
-        # 6. Análisis de Doppler Beaming Relativista (Mazeh & Faigler 2010)
-        print("[Pipeline] Evaluando efecto Doppler Beaming relativista...")
+        # 6. Relativistic Doppler Beaming (Mazeh & Faigler 2010)
+        print("[Pipeline] Evaluating relativistic Doppler Beaming...")
         doppler_res = self.doppler_detector.evaluate(lc, orbital_period_days=ellip_res.get("orbital_period_days"), star_mass=star_mass)
 
-        # 7. Análisis de Acreción y Relación RMS-Flujo (Uttley et al. 2005)
-        print("[Pipeline] Evaluando variabilidad aperiódica y relación RMS-Flujo...")
+        # 7. Accretion and RMS–Flux Relation (Uttley et al. 2005)
+        print("[Pipeline] Evaluating aperiodic variability and RMS–Flux relation...")
         flicker_res = self.flickering_detector.evaluate(lc)
 
-        # 8. Análisis Box Least Squares (BLS) para Eclipses de Disco Circunestelar
-        print("[Pipeline] Evaluando algoritmo Box Least Squares (BLS) para eclipses de disco...")
+        # 8. Box Least Squares (BLS) for Circumstellar Disk Eclipses
+        print("[Pipeline] Evaluating BLS for disk eclipses...")
         bls_res = self.bls_detector.evaluate(lc)
 
-        # 9. Filtro de Veto de Centroide (Pixel Centroid Shift Veto)
-        print("[Pipeline] Verificando estabilidad de centroide PRF de TESS...")
+        # 9. Centroid Veto Filter (Pixel Centroid Shift)
+        print("[Pipeline] Verifying TESS PRF centroid stability...")
         centroid_res = self.centroid_filter.evaluate(lc)
 
-        # 10. Filtro de Persistencia de Fase y Armónicos de Excentricidad (3f, 4f)
-        print("[Pipeline] Evaluando coherencia de fase y armónicos excéntricos (anti-manchas solares)...")
+        # 10. Phase Persistence and Eccentricity Harmonics Filter (3f, 4f)
+        print("[Pipeline] Evaluating phase coherence and eccentric harmonics (anti-starspot)...")
         ecc_res = self.eccentric_filter.evaluate(lc, orbital_period_days=ellip_res.get("orbital_period_days"))
 
-        # 11. Geometría de Lóbulos de Roche (Eggleton 1983)
+        # 11. Roche Lobe Geometry (Eggleton 1983)
         roche_res = self.roche_analyzer.calculate_roche_geometry(
             m_primary=star_mass,
             m_bh=ellip_res.get("estimated_compact_mass_msun", 6.0),
@@ -124,35 +123,35 @@ class BlackHolePipeline:
             r_star_rsun=star_rad
         )
 
-        # Jerarquía de selección del mejor modelo físico detectado
+        # Select best physical model detected
         candidates_list = [d for d in [micro_res, self_lens_res, ellip_res, doppler_res, flicker_res, bls_res] if d.get("is_candidate")]
         best_detection = candidates_list[0] if candidates_list else ellip_res
 
-        # VETO 1: Desplazamiento de centroide estelar (estrella contaminante de fondo)
+        # VETO 1: Centroid shift (background contaminating star)
         if centroid_res.get("is_blended_background_artifact"):
-            print(f"[Pipeline] ⚠️ Veto de centroide activado: variación atribuible a estrella de fondo contaminante ({centroid_res.get('centroid_shift_arcsec', 0):.1f} arcsec)")
+            print(f"[Pipeline] Centroid veto triggered: variation attributable to background contaminant ({centroid_res.get('centroid_shift_arcsec', 0):.1f} arcsec)")
             best_detection = {
                 "is_candidate": False,
-                "type": "Descartado por Desplazamiento de Centroide",
-                "reason": f"Falso positivo por binaria contaminante de fondo (desplazamiento de centroide {centroid_res.get('centroid_shift_arcsec', 0):.1f}\")"
+                "type": "Rejected by Centroid Shift",
+                "reason": f"False positive from background blended binary (centroid shift {centroid_res.get('centroid_shift_arcsec', 0):.1f}\")"
             }
 
-        # VETO 2: Deriva de fase de manchas estelares en rotación
+        # VETO 2: Phase drift from rotating starspots
         if ecc_res.get("is_stellar_spot_artifact") and best_detection.get("is_candidate"):
-            print(f"[Pipeline] ⚠️ Veto de manchas solares activado: falta de coherencia de fase temporal ({ecc_res.get('phase_coherence', 0):.2f})")
+            print(f"[Pipeline] Starspot veto triggered: temporal phase incoherence ({ecc_res.get('phase_coherence', 0):.2f})")
             best_detection = {
                 "is_candidate": False,
-                "type": "Descartado por Variabilidad de Manchas Solares",
-                "reason": f"Incoherencia de fase orbital ({ecc_res.get('phase_coherence', 0):.2f}): compatible con evolución de manchas estelares activas."
+                "type": "Rejected by Starspot Variability",
+                "reason": f"Orbital phase incoherence ({ecc_res.get('phase_coherence', 0):.2f}): consistent with active starspot evolution."
             }
 
-        # 10. Evaluación de novedad (No documentado)
+        # Novelty assessment (undocumented candidate check)
         assessment = self.cross_matcher.assess_undocumented_bh_potential(cross_match, best_detection)
 
-        # 6. VERIFICACIÓN MULTIOBSERVATORIO AUTOMÁTICA EN TIEMPO REAL (FILTRO ESTRICTO DE VETO)
+        # Multi-observatory auto-verification (strict veto filter)
         auto_verification = None
         if assessment.get("undocumented_candidate"):
-            print(f"[Pipeline] 🔬 Ejecutando Verificación Automática Multi-Observatorio (Gaia / Chandra / Límite OV)...")
+            print(f"[Pipeline] Running Multi-Observatory Auto-Verification (Gaia / Chandra / OV Limit)...")
             auto_verification = self.auto_verifier.run_auto_verification(
                 target_id=target_id,
                 detection=best_detection,
@@ -160,11 +159,10 @@ class BlackHolePipeline:
             )
             v_score = auto_verification.get("final_score", 0)
             v_status = auto_verification.get("status", "")
-            print(f"[Pipeline] 🛡️  Resultado Verificación Automática: Score {v_score}/100 [{v_status}]")
+            print(f"[Pipeline] Auto-Verification Result: Score {v_score}/100 [{v_status}]")
             print(f"[Pipeline]    {auto_verification.get('verdict')}")
 
-            # FILTRO ESTRICTO: Si la verificación concluye que es una binaria estelar común o señal no concluyente (<60%),
-            # se ANULA la designación de candidato inmediatamente.
+            # Strict filter: if verification concludes common stellar binary or inconclusive (<60%), revoke candidate status.
             if v_score < 60 or v_status == "INCONCLUSIVE_OR_STELLAR":
                 assessment["undocumented_candidate"] = False
                 assessment["confidence"] = "Low"
@@ -173,8 +171,8 @@ class BlackHolePipeline:
                 assessment["auto_verification"] = auto_verification
                 assessment["verdict"] = f"{assessment['verdict']} | {auto_verification.get('verdict')}"
 
-                # INFERENCIA BAYESIANA MCMC FORMAL CUANDO SE CONFIRMA CANDIDATO FUERTE
-                print(f"[Pipeline] ⚛️  Ejecutando Inferencia Bayesiana MCMC (emcee) para estimar distribución de masa...")
+                # Bayesian MCMC inference for strong confirmed candidates
+                print(f"[Pipeline] Running Bayesian MCMC (emcee) for mass posterior estimation...")
                 try:
                     time_v = np.ascontiguousarray(lc.time.value, dtype=float)
                     flux_v = np.ascontiguousarray(lc.flux.value, dtype=float)
@@ -191,14 +189,14 @@ class BlackHolePipeline:
                 except Exception as e_mcmc:
                     print(f"[Pipeline] MCMC notice: {e_mcmc}")
 
-                # INSPECCIÓN ESPECTRAL GAIA DR3 (XP/RP)
+                # Gaia DR3 spectral inspection (XP/RP)
                 t_ra = cross_match.get("tic_info", {}).get("ra")
                 t_dec = cross_match.get("tic_info", {}).get("dec")
                 if t_ra is not None and t_dec is not None:
                     spec_res = self.spectral_inspector.inspect_spectrum(t_ra, t_dec)
                     assessment["gaia_spectrum"] = spec_res
 
-        # 8. Generar reporte estructurado y Propuesta ToO en PDF si es candidato
+        # Generate structured report and ToO proposal PDF if candidate
         report_file = self.report_gen.generate_candidate_report(
             target_id=target_id,
             lc=lc,
@@ -218,20 +216,20 @@ class BlackHolePipeline:
                     "assessment": assessment,
                     "simbad_info": cross_match,
                     "criteria_list": [
-                        f"Firma astronómica: {best_detection.get('type')}",
-                        f"Veredicto: {assessment.get('verdict')}",
-                        "Sin catalogación previa en SIMBAD como agujero negro o exoplaneta confirmado.",
-                        "Auto-Verificación Multi-Observatorio completada exitosamente."
+                        f"Astronomical signature: {best_detection.get('type')}",
+                        f"Verdict: {assessment.get('verdict')}",
+                        "No prior catalogation in SIMBAD as confirmed black hole or exoplanet.",
+                        "Multi-Observatory Auto-Verification completed successfully."
                     ]
                 }
                 proposal_pdf = self.proposal_gen.generate_pdf_proposal(candidate_summary)
             except Exception as e:
-                print(f"[Pipeline] Error al generar propuesta PDF: {e}")
+                print(f"[Pipeline] Error generating PDF proposal: {e}")
 
-        # Extraer fotometría muestreada para visualización interactiva (Plotly en monitor)
+        # Extract sampled photometry for interactive visualization (Plotly in dashboard)
         times_sample = lc.time.value
         flux_sample = lc.flux.value
-        # Si tiene muchos puntos, remuestrear a ~400 puntos para transferencia web rápida
+        # Downsample to ~400 points for fast web transfer
         if len(times_sample) > 400:
             step = len(times_sample) // 400
             times_sample = times_sample[::step]
@@ -254,6 +252,6 @@ class BlackHolePipeline:
             "report_path": report_file
         }
 
-        print(f"[Pipeline] Veredicto: {assessment.get('verdict')}")
-        print(f"[Pipeline] ¿Candidato a Agujero Negro sin documentar?: {assessment.get('undocumented_candidate')}")
+        print(f"[Pipeline] Verdict: {assessment.get('verdict')}")
+        print(f"[Pipeline] Undocumented Black Hole Candidate?: {assessment.get('undocumented_candidate')}")
         return result

@@ -1,5 +1,5 @@
 """
-Generador de informes y diagnósticos gráficos para curvas de luz y candidatos a agujeros negros.
+Report and diagnostic plot generator for light curves and black hole candidates.
 """
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -20,11 +20,11 @@ class ReportGenerator:
 
     def generate_candidate_report(self, target_id: str, lc: lk.LightCurve, detection: Dict[str, Any], cross_match: Dict[str, Any], assessment: Dict[str, Any]) -> str:
         """
-        Genera archivo JSON y gráfica diagnóstica para el candidato.
+        Generate JSON file and diagnostic plot for the candidate.
         """
         clean_name = target_id.replace(" ", "_").replace("/", "_")
-        
-        # 1. Guardar resumen estructurado en JSON
+
+        # 1. Save structured summary as JSON
         report_data = {
             "target_id": target_id,
             "detection": {k: v for k, v in detection.items() if k != "model_flux"},
@@ -35,7 +35,7 @@ class ReportGenerator:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
 
-        # 2. Generar gráfico diagnóstico
+        # 2. Generate diagnostic plot
         fig_path = self.plots_dir / f"{clean_name}_diagnostic.png"
         self._plot_diagnostic(clean_name, lc, detection, assessment, fig_path)
 
@@ -48,7 +48,7 @@ class ReportGenerator:
         flux = lc.flux.value
         ax.scatter(time, flux, s=2, color="#1f77b4", alpha=0.6, label="TESS Normalized Flux")
 
-        # Si hay ajuste de modelo de microlente
+        # If microlensing model fit is available
         if "model_flux" in detection and detection["model_flux"] is not None:
             ax.plot(time, detection["model_flux"], color="#d62728", lw=2, label="Paczyński Microlensing Fit")
 

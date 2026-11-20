@@ -1,6 +1,6 @@
 """
-Detector de Desplazamiento de Centroide a Nivel de Píxel (PRF Centroid Shift).
-Descarta binarias eclipsantes o variables de fondo dentro de la apertura de 21" de TESS.
+Pixel-level PRF Centroid Shift detector.
+Rejects background eclipsing binaries or variables within the 21" TESS aperture.
 """
 from typing import Dict, Any
 import numpy as np
@@ -12,11 +12,11 @@ class CentroidVetoFilter:
 
     def evaluate(self, lc: lk.LightCurve) -> Dict[str, Any]:
         """
-        Calcula la correlación entre las variaciones de brillo y el desplazamiento del centroide estelar.
-        Si la posición del centroide se desplaza al mismo tiempo que el brillo cambia, el evento proviene
-        de una estrella de fondo contaminante, no del objetivo central.
+        Computes the correlation between brightness variations and stellar centroid displacement.
+        If the centroid position shifts at the same time brightness changes, the event originates
+        from a background contaminating star, not the central target.
         """
-        # Comprobar si la curva de luz SPOC contiene momentos de centroide (mom_centr1, mom_centr2)
+        # Check if the SPOC lightcurve contains centroid moments (mom_centr1, mom_centr2)
         has_centroids = hasattr(lc, "centroid_col") and hasattr(lc, "centroid_row")
         if not has_centroids or lc.centroid_col is None or lc.centroid_row is None:
             return {
@@ -36,20 +36,20 @@ class CentroidVetoFilter:
         if len(col) < 100:
             return {"has_centroid_data": False, "is_blended_background_artifact": False}
 
-        # Desviación típica del centroide en píxeles TESS (1 píxel = 21 segundos de arco)
+        # Centroid standard deviation in TESS pixels (1 pixel = 21 arcseconds)
         col_med = np.median(col)
         row_med = np.median(row)
         dist_px = np.sqrt((col - col_med)**2 + (row - row_med)**2)
-        
-        # Desplazamiento en el 95 percentil convertido a arcsec
+
+        # 95th percentile displacement converted to arcsec
         shift_95_arcsec = float(np.percentile(dist_px, 95) * 21.0)
 
-        # Correlación entre flujo y distancia al centro
+        # Correlation between flux and distance to center
         corr = float(np.corrcoef(flux, dist_px)[0, 1])
         if np.isnan(corr):
             corr = 0.0
 
-        # Si el desplazamiento durante las anomalías excede el umbral y correlaciona con el flujo:
+        # If displacement during anomalies exceeds threshold and correlates with flux:
         is_blended = (shift_95_arcsec > self.max_allowed_shift and abs(corr) > 0.45)
 
         return {

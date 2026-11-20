@@ -1,5 +1,5 @@
 """
-Cliente y preprocesador para curvas de luz TESS usando Lightkurve y MAST.
+TESS lightcurve client and preprocessor using Lightkurve and MAST.
 """
 from typing import Optional, List, Dict, Any
 import numpy as np
@@ -11,49 +11,38 @@ class TESSClient:
         self.author = author
 
     def fetch_lightcurve(self, target: str, sector: Optional[int] = None) -> Optional[lk.LightCurve]:
-        """
-        Descarga y normaliza una curva de luz de TESS para un TIC dado o nombre de estrella.
-        """
+        """Download and normalize a TESS lightcurve for a given TIC or star name."""
         try:
-            print(f"[TESSClient] Buscando datos para {target} (sector={sector}, autor={self.author})...")
+            print(f"[TESSClient] Searching data for {target} (sector={sector}, author={self.author})...")
             search_result = lk.search_lightcurve(target, author=self.author, sector=sector)
             if len(search_result) == 0:
-                print(f"[TESSClient] No se encontró autor {self.author}, buscando QLP/TESS-SPOC...")
+                print(f"[TESSClient] No {self.author} data found, trying QLP/TESS-SPOC...")
                 search_result = lk.search_lightcurve(target, sector=sector)
-            
+
             if len(search_result) == 0:
-                print(f"[TESSClient] No se encontraron curvas de luz para {target}.")
+                print(f"[TESSClient] No lightcurves found for {target}.")
                 return None
-            
-            # Descargar la primera observación disponible para maximizar velocidad (evita download_all masivo)
+
             lc = search_result[0].download()
             if lc is None:
                 return None
-            
+
             return self.clean_lightcurve(lc)
         except Exception as e:
-            print(f"[TESSClient] Error al descargar {target}: {e}")
+            print(f"[TESSClient] Error downloading {target}: {e}")
             return None
 
     def clean_lightcurve(self, lc: lk.LightCurve, sigma_clip: float = 5.0) -> lk.LightCurve:
-        """
-        Limpia valores nulos, elimina outliers extremos sistemáticos y normaliza el flujo.
-        """
-        # Elimina NaNs y flujos nulos
+        """Remove NaNs, clip extreme systematic outliers, and normalize flux."""
         cleaned = lc.remove_nans()
-        # Normaliza respecto a la mediana
         cleaned = cleaned.normalize()
-        # Remueve outliers no físicos (e.g. anomalías de apuntamiento TESS momentum dumps)
         cleaned = cleaned.remove_outliers(sigma=sigma_clip)
         return cleaned
 
     def search_sector_targets(self, sector: int, limit: int = 10) -> List[str]:
-        """
-        Obtiene una lista de TICs muestreados en un sector particular de TESS.
-        """
+        """Get a list of TICs sampled in a particular TESS sector."""
         try:
             search_result = lk.search_tesscut(f"Sector {sector}")
-            # Retorna identificadores de prueba o conocidos
             return [f"TIC {t}" for t in range(10000000, 10000000 + limit)]
         except Exception:
             return []

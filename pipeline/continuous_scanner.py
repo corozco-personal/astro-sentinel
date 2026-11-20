@@ -1,8 +1,7 @@
 """
-Demonio y Gestor de Escaneo Continuo de Datos de TESS.
-Descarga y analiza sistemáticamente lotes de curvas de luz, guarda el estado
-de estrellas ya procesadas en SQLite y notifica inmediatamente cuando un candidato
-pasa todos los filtros sin coincidencia previa en fuentes oficiales.
+TESS Continuous Scan Daemon — systematically downloads and analyzes lightcurve batches,
+persists processed-star state in SQLite, and triggers alerts when a candidate
+passes all filters with no prior match in official sources.
 """
 import sqlite3
 import time
@@ -29,7 +28,7 @@ class ContinuousScanner:
         self._init_db()
 
     def _init_db(self):
-        """Inicializa la base de datos de control de progreso con WAL mode para concurrencia."""
+        """Initialize progress-tracking database with WAL mode for concurrency."""
         with sqlite3.connect(self.db_path, timeout=30.0) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
@@ -45,7 +44,7 @@ class ContinuousScanner:
                     dec REAL
                 )
             """)
-            # Agregar columnas si la tabla ya existía previamente
+            # Add columns if table already existed
             try:
                 conn.execute("ALTER TABLE processed_targets ADD COLUMN ra REAL")
             except Exception:
@@ -71,22 +70,20 @@ class ContinuousScanner:
             conn.commit()
 
     def fetch_targets_from_sector(self, sector: int, limit: int = 50) -> List[str]:
-        """Obtiene una lista de estrellas observadas por TESS en un sector."""
-        print(f"[Scanner] Consultando objetivos disponibles para Sector {sector}...")
+        """Get a list of stars observed by TESS in a sector."""
+        print(f"[Scanner] Querying available targets for Sector {sector}...")
         try:
-            # Consulta objetivos de alta prioridad en el sector
             search = lk.search_tesscut(f"Sector {sector}")
-            # Si no está directo, consultar coordenadas típicas o TIC
         except Exception:
             pass
         return []
 
     def fetch_confirmed_tess_targets(self, sector: int = 1, limit: int = 150) -> List[str]:
         """
-        Consulta en MAST los objetivos que efectivamente disponen de series temporales (curvas de luz)
-        procesadas por TESS para ese sector, aplicando pre-filtrado de calidad y brillo.
+        Query MAST for targets that have processed TESS timeseries (lightcurves)
+        for this sector, with quality and brightness pre-filtering.
         """
-        print(f"[Scanner] Consultando objetivos de alta calidad con curvas de luz reales en TESS Sector {sector}...")
+        print(f"[Scanner] Querying high-quality targets with real lightcurves in TESS Sector {sector}...")
         try:
             from astroquery.mast import Observations
             obs = Observations.query_criteria(
@@ -98,32 +95,32 @@ class ContinuousScanner:
             for row in obs:
                 name = str(row["target_name"]).strip()
                 if name and name.isdigit():
-                    # Pre-filtrado rápido: descartar duplicados inmediatos
+                    # Quick pre-filter: discard immediate duplicates
                     t_str = f"TIC {name}"
                     if not self.is_processed(t_str):
                         targets.append(t_str)
                 if len(targets) >= limit:
                     break
-            print(f"[Scanner] Cola optimizada con {len(targets)} objetivos no analizados.")
+            print(f"[Scanner] Optimized queue with {len(targets)} unanalyzed targets.")
             return targets
         except Exception as e:
-            print(f"[Scanner] Error consultando Observations: {e}")
+            print(f"[Scanner] Error querying Observations: {e}")
             return []
 
     def run_continuous_scan(self, custom_targets: Optional[List[str]] = None, max_iterations: Optional[int] = None, sector: int = 1):
         """
-        Bucle de ejecución continua: procesa objetivos, audita anomalías y notifica.
+        Continuous execution loop: process targets, audit anomalies, and notify.
         """
         print("\n" + "="*70)
-        print("🚀 INICIANDO DEMONIO DE BÚSQUEDA CONTINUA DE AGUJEROS NEGROS EN TESS")
-        print(f"📁 Base de datos de estado: {self.db_path}")
-        print(f"🔔 Registro de alertas: {self.alerts_file}")
+        print("STARTING ASTRO SENTINEL CONTINUOUS SCAN DAEMON")
+        print(f"State database: {self.db_path}")
+        print(f"Alert log: {self.alerts_file}")
         print("="*70 + "\n")
 
         processed_count = 0
         current_sector = sector
 
-        # Llenar cola con objetivos proporcionados o consultar observaciones reales de TESS
+        # Fill queue with provided targets or query real TESS observations
         queue = list(custom_targets) if custom_targets else []
         if not queue:
             queue.extend(self.fetch_confirmed_tess_targets(sector=current_sector, limit=100))
@@ -132,7 +129,7 @@ class ContinuousScanner:
             target_id = queue.pop(0)
 
             if self.is_processed(target_id):
-                print(f"[Scanner] Omitiendo {target_id} (ya analizado previamente).")
+                print(f"[Scanner] Skipping {target_id} (already analyzed).")
                 continue
 
             try:
@@ -157,25 +154,25 @@ class ContinuousScanner:
                     dec=target_dec
                 )
 
-                # Si es un candidato tentativo no documentado, ¡NOTIFICAR!
+                # Notify if undocumented candidate
                 if is_undocumented:
                     self.notifier.notify(result)
 
             except Exception as e:
-                print(f"[Scanner] Error procesando {target_id}: {e}")
+                print(f"[Scanner] Error processing {target_id}: {e}")
                 self.mark_processed(target_id, "ERROR", False, str(e))
 
             processed_count += 1
             if max_iterations and processed_count >= max_iterations:
-                print(f"[Scanner] Se alcanzó el límite configurado de {max_iterations} análisis.")
+                print(f"[Scanner] Configured limit of {max_iterations} analyses reached.")
                 break
 
             time.sleep(self.delay)
 
-            # Si la cola se vacía, avanzar secuencialmente en el catálogo o siguiente sector de TESS
+            # If queue empties, advance to next TESS sector
             if len(queue) == 0 and (max_iterations is None or processed_count < max_iterations):
                 current_sector += 1
                 if current_sector > 80:
                     current_sector = 1
-                print(f"[Scanner] Cola completada. Avanzando a TESS Sector {current_sector}...")
+                print(f"[Scanner] Queue completed. Advancing to TESS Sector {current_sector}...")
                 queue.extend(self.fetch_confirmed_tess_targets(sector=current_sector, limit=100))

@@ -1,7 +1,7 @@
 """
-Consulta Espectral en Línea con Gaia DR3 (XP/RP Synthetic Continuous Spectra).
-Permite verificar la línea de emisión H-Alpha (656.3 nm) de discos de acreción
-o confirmar el tipo espectral estelar para asegurar la masa del sistema.
+Online Spectral Query with Gaia DR3 (XP/RP Synthetic Continuous Spectra).
+Verifies the H-Alpha emission line (656.3 nm) from accretion disks
+or confirms stellar spectral type to constrain the system mass.
 """
 from typing import Dict, Any, Optional
 import numpy as np
@@ -15,12 +15,12 @@ class GaiaSpectralInspector:
 
     def inspect_spectrum(self, ra: float, dec: float) -> Dict[str, Any]:
         """
-        Inspecciona metadatos espectro-fotométricos de Gaia DR3:
+        Inspect Gaia DR3 spectro-photometric metadata:
         - bp_rp color index
         - phot_g_mean_mag
-        - teff_gspphot (Temperatura efectiva estelar)
-        - logg_gspphot (Gravedad superficial para discriminar enanas de gigantes)
-        - Indicador de emisión en H-Alpha
+        - teff_gspphot (stellar effective temperature)
+        - logg_gspphot (surface gravity to discriminate dwarfs from giants)
+        - H-Alpha emission indicator
         """
         try:
             coord = SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
@@ -34,11 +34,8 @@ class GaiaSpectralInspector:
             teff = float(row.get("teff_gspphot", 0.0) or 5778.0)
             logg = float(row.get("logg_gspphot", 0.0) or 4.4)
 
-            # Clasificación espectral aproximada
             is_giant_star = logg < 3.5
             is_hot_subgiant = teff > 7500.0
-
-            # Línea H-Alpha y acreción: estrellas de emisión temprana
             has_accretion_signature = is_hot_subgiant and bp_rp < 0.2
 
             return {

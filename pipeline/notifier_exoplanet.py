@@ -24,7 +24,7 @@ class ExoplanetAlertNotifier:
         if not NotificationPolicyJudge.can_notify_telegram("exoplanet", candidate_data):
             return
 
-        # ESTRICTO: Solo despachar si es un candidato real confirmado
+        # STRICT: Only dispatch if confirmed as a real candidate
         if not candidate_data.get("is_candidate"):
             return
         verdict = str(candidate_data.get("verdict", "")).upper()

@@ -1,8 +1,8 @@
 """
-Detector de Self-Lensing Gravitatorio en Binarias Compactas (Agol 2002, Kruse & Agol 2014).
-Cuando un agujero negro estelar transita frente a su estrella compañera,
-la lente gravitatoria del agujero negro desvía y concentra los rayos de luz de la estrella,
-produciendo un pulso de magnificación ultra-rápido en lugar de un eclipse de sombra tradicional.
+Gravitational Self-Lensing detector in compact binaries (Agol 2002, Kruse & Agol 2014).
+When a stellar-mass black hole transits in front of its companion star,
+the gravitational lens of the black hole deflects and focuses the star's light rays,
+producing an ultra-rapid magnification pulse instead of a traditional shadow eclipse.
 """
 from typing import Dict, Any, Optional
 import numpy as np
@@ -15,8 +15,8 @@ class SelfLensingDetector:
 
     def evaluate(self, lc: lk.LightCurve, orbital_period_days: Optional[float] = None) -> Dict[str, Any]:
         """
-        Busca pulsos de magnificación periódicos (Self-Lensing pulses) característicos
-        de un agujero negro o estrella de neutrones pasando frente al disco estelar.
+        Searches for periodic magnification pulses (Self-Lensing pulses) characteristic
+        of a black hole or neutron star passing in front of the stellar disk.
         """
         time = np.ascontiguousarray(lc.time.value, dtype=float)
         flux = np.ascontiguousarray(lc.flux.value, dtype=float)
@@ -25,9 +25,9 @@ class SelfLensingDetector:
         time, flux = time[valid], flux[valid]
 
         if len(time) < 150:
-            return {"is_candidate": False, "reason": "Puntos insuficientes"}
+            return {"is_candidate": False, "reason": "Insufficient data points"}
 
-        # Línea base local móvil (mediana en ventana de 1.5 días)
+        # Local moving baseline (median in 1.5-day window)
         dt = np.median(np.diff(time))
         window_size = max(15, int(1.5 / dt))
         if window_size % 2 == 0:
@@ -38,18 +38,18 @@ class SelfLensingDetector:
         residual = flux - smooth_base
         std_noise = np.std(residual) + 1e-9
 
-        # Buscar picos positivos anómalos estrechos (Self-lensing pulses)
+        # Search for narrow anomalous positive peaks (Self-lensing pulses)
         pulse_mask = residual > (self.min_pulse_snr * std_noise)
         peak_indices = np.where(pulse_mask)[0]
 
         if len(peak_indices) == 0:
             return {
                 "is_candidate": False,
-                "reason": "Sin pulsos de magnificación focal detectados",
+                "reason": "No focal magnification pulses detected",
                 "max_snr": float(np.max(residual) / std_noise)
             }
 
-        # Agrupar puntos contiguos en eventos individuales
+        # Group contiguous points into individual events
         events = []
         current_event = [peak_indices[0]]
         for idx in peak_indices[1:]:
@@ -60,7 +60,7 @@ class SelfLensingDetector:
                 current_event = [idx]
         events.append(current_event)
 
-        # Filtrar por duración física (un pulso de self-lensing dura pocas horas)
+        # Filter by physical duration (a self-lensing pulse lasts a few hours)
         valid_pulses = []
         for ev in events:
             ev_times = time[ev]
@@ -83,5 +83,5 @@ class SelfLensingDetector:
             "pulse_count": len(valid_pulses),
             "pulses": valid_pulses,
             "max_snr": float(np.max([p["snr"] for p in valid_pulses])) if valid_pulses else 0.0,
-            "reason": f"Detectado pulso de magnificación gravitatoria focal (Self-Lensing) con SNR {valid_pulses[0]['snr']:.1f}" if is_self_lensing else "Sin pulsos válidos"
+            "reason": f"Detected focal gravitational magnification pulse (Self-Lensing) with SNR {valid_pulses[0]['snr']:.1f}" if is_self_lensing else "No valid pulses"
         }

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Punto de entrada para el Demonio / Servicio de Escaneo Continuo de TESS.
-Permite ejecutar el escaneo autónomo en segundo plano o interactivo.
+Entry point for the TESS Continuous Scan Daemon.
 """
 import argparse
 import sys
@@ -9,25 +8,25 @@ from pipeline.continuous_scanner import ContinuousScanner
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Escaneo Continuo y Vigilancia Autónoma de Agujeros Negros en TESS"
+        description="Astro Sentinel — Continuous Autonomous TESS Scan"
     )
     parser.add_argument(
         "--delay",
         type=float,
         default=0.5,
-        help="Demora en segundos entre consultas a TESS/MAST para evitar rate limits (default: 0.5s)"
+        help="Delay in seconds between TESS/MAST queries to avoid rate limits (default: 0.5s)"
     )
     parser.add_argument(
         "--targets-file",
         type=str,
         default=None,
-        help="Archivo opcional con lista de TICs o estrellas a escanear línea por línea"
+        help="Optional file with TIC IDs to scan, one per line"
     )
     parser.add_argument(
         "--max-targets",
         type=int,
         default=None,
-        help="Máximo de objetivos a evaluar (omitir para escaneo infinito continuo)"
+        help="Maximum targets to evaluate (omit for infinite continuous scan)"
     )
 
     args = parser.parse_args()
@@ -38,7 +37,7 @@ def main():
             with open(args.targets_file, "r", encoding="utf-8") as f:
                 targets = [line.strip() for line in f if line.strip() and not line.startswith("#")]
         except Exception as e:
-            print(f"Error al leer {args.targets_file}: {e}")
+            print(f"Error reading {args.targets_file}: {e}")
             sys.exit(1)
 
     scanner = ContinuousScanner(delay_between_targets=args.delay)

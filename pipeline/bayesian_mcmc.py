@@ -1,7 +1,7 @@
 """
-Módulo de Inferencia Bayesiana MCMC (Markov Chain Monte Carlo) y Modelado Físico Posterior.
-Utiliza 'emcee' (Foreman-Mackey et al.) para obtener distribuciones de probabilidad a posteriori
-y barras de error formales (1-sigma / 68% intervalo de confianza) para la masa del agujero negro.
+Bayesian MCMC (Markov Chain Monte Carlo) Inference and Physical Posterior Modeling.
+Uses 'emcee' (Foreman-Mackey et al.) to obtain posterior probability distributions
+and formal error bars (1-sigma / 68% confidence interval) for the black hole mass.
 """
 from typing import Dict, Any, Optional
 import numpy as np
@@ -14,28 +14,24 @@ class BayesianMCMCAnalyzer:
 
     def fit_bh_posterior(self, time: np.ndarray, flux: np.ndarray, flux_err: np.ndarray, initial_period: float, initial_mass: float) -> Dict[str, Any]:
         """
-        Calcula las distribuciones a posteriori para:
-        - Masa del Agujero Negro M_BH (M_sun)
-        - Inclinación orbital i (grados)
-        - Período orbital P_orb (días)
+        Compute posterior distributions for:
+        - Black Hole Mass M_BH (M_sun)
+        - Orbital Inclination i (degrees)
+        - Orbital Period P_orb (days)
         """
-        # Función log-likelihood para el modelo elipsoidal + beaming
         def log_likelihood(theta, t, y, yerr):
             m_bh, inc_deg, p_orb = theta
             if m_bh < 1.0 or m_bh > 150.0 or inc_deg < 10.0 or inc_deg > 90.0 or p_orb <= 0.2:
                 return -np.inf
-            
-            # Modelo de marea simplificado
+
             phase = (t / p_orb) % 1.0
             inc_rad = np.radians(inc_deg)
-            # Amplitud modulada por masa e inclinación
             amp = (m_bh / (m_bh + 1.0)) * 0.02 * (np.sin(inc_rad)**2)
             model = 1.0 - amp * np.cos(4.0 * np.pi * phase)
             return -0.5 * np.sum(((y - model) / yerr) ** 2)
 
         def log_prior(theta):
             m_bh, inc_deg, p_orb = theta
-            # Priors no informativos físicos
             if 2.0 < m_bh < 80.0 and 15.0 < inc_deg < 89.0 and 0.3 < p_orb < 150.0:
                 return 0.0
             return -np.inf
@@ -54,7 +50,7 @@ class BayesianMCMCAnalyzer:
         ]
         p0 = np.array(p0).T
 
-        # Submuestreo rápido si hay demasiados puntos
+        # Fast subsampling if too many data points
         if len(time) > 800:
             step = len(time) // 800
             t_sub, f_sub, e_sub = time[::step], flux[::step], flux_err[::step]
@@ -64,7 +60,7 @@ class BayesianMCMCAnalyzer:
         sampler = emcee.EnsembleSampler(self.n_walkers, ndim, log_probability, args=(t_sub, f_sub, e_sub))
         sampler.run_mcmc(p0, self.n_steps, progress=False)
 
-        # Descartar burn-in
+        # Discard burn-in
         flat_samples = sampler.get_chain(discard=50, flat=True)
         m_samples = flat_samples[:, 0]
         inc_samples = flat_samples[:, 1]

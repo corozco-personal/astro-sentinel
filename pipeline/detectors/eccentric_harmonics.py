@@ -1,6 +1,6 @@
 """
-Detector de Armónicos de Excentricidad Orbital y Filtro de Persistencia de Fase.
-Distingue entre manchas estelares en rotación (fase variable) y agujeros negros en órbitas elípticas (3f, 4f fijos).
+Orbital Eccentricity Harmonics and Phase Persistence Filter.
+Distinguishes between rotating starspots (variable phase) and black holes in elliptical orbits (fixed 3f, 4f).
 """
 from typing import Dict, Any, Optional
 import numpy as np
@@ -13,10 +13,10 @@ class EccentricHarmonicsAndPhaseFilter:
 
     def evaluate(self, lc: lk.LightCurve, orbital_period_days: Optional[float] = None) -> Dict[str, Any]:
         """
-        1. Evalúa armónicos de orden superior 3f y 4f para modelar órbitas de alta excentricidad (como Gaia BH1 con e=0.45).
-        2. Divide la curva de luz en dos mitades y compara la fase de la señal:
-           - Si la fase cambia > 45° entre las dos mitades -> Manchas solares / actividad estelar (se descarta).
-           - Si la fase es fija y coherente -> Mareas gravitatorias de compañero compacto.
+        1. Evaluates higher-order harmonics 3f and 4f to model high-eccentricity orbits (like Gaia BH1 with e=0.45).
+        2. Splits the lightcurve into two halves and compares the signal phase:
+           - If phase changes > 45 degrees between halves -> Starspots / stellar activity (rejected).
+           - If phase is fixed and coherent -> Gravitational tides from compact companion.
         """
         time = np.ascontiguousarray(lc.time.value, dtype=float)
         flux = np.ascontiguousarray(lc.flux.value, dtype=float)
@@ -35,12 +35,12 @@ class EccentricHarmonicsAndPhaseFilter:
         p_3f = float(ls.power(3.0 * base_freq))
         p_4f = float(ls.power(4.0 * base_freq))
 
-        # Índice de excentricidad a partir del ratio de armónicos superiores (3f + 4f) / (1f + 2f)
+        # Eccentricity index from higher harmonics ratio (3f + 4f) / (1f + 2f)
         total_low = p_1f + p_2f + 1e-9
         higher_harmonics_ratio = (p_3f + p_4f) / total_low
         estimated_eccentricity = min(0.85, higher_harmonics_ratio * 0.75)
 
-        # Prueba de persistencia de fase temporal (dividir en 2 mitades)
+        # Temporal phase persistence test (split into 2 halves)
         mid_idx = len(time) // 2
         t1, f1 = time[:mid_idx], flux[:mid_idx]
         t2, f2 = time[mid_idx:], flux[mid_idx:]
@@ -50,8 +50,8 @@ class EccentricHarmonicsAndPhaseFilter:
 
         m1 = np.mean(f1 * np.sin(2.0 * np.pi * 2.0 * phase1))
         m2 = np.mean(f2 * np.sin(2.0 * np.pi * 2.0 * phase2))
-        
-        # Coherencia de fase
+
+        # Phase coherence
         coherence = 1.0 - min(1.0, abs(m1 - m2) / (abs(m1) + abs(m2) + 1e-6))
         is_stellar_spot = coherence < self.min_coherence
 

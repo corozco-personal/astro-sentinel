@@ -1,7 +1,7 @@
 """
-Módulo de Notificaciones y Alertas para Candidatos a Agujeros Negros.
-Permite notificaciones en consola, en archivo de log de alertas (alert_feed.jsonl),
-notificaciones sonoras/sistema o webhooks (Slack/Discord/Telegram).
+Notification and Alert Module for Black Hole Candidates.
+Supports console notifications, alert log file (alert_feed.jsonl),
+system/sound notifications and webhooks (Slack/Discord/Telegram).
 """
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -17,9 +17,9 @@ class AlertNotifier:
 
     def notify(self, candidate_info: Dict[str, Any]):
         """
-        Emite una alerta sobre un nuevo candidato tentativo detectado.
-        ESTRICTO: Solo se notifica si está confirmado como candidato real (is_candidate=True / undocumented_candidate=True).
-        NUNCA notificar falsos positivos, descartes o información insuficiente.
+        Emit an alert about a newly detected tentative candidate.
+        STRICT: Only notify if confirmed as a real candidate (is_candidate=True / undocumented_candidate=True).
+        NEVER notify on false positives, rejections or insufficient data.
         """
         assessment = candidate_info.get("assessment", {})
         is_candidate = (
@@ -31,12 +31,10 @@ class AlertNotifier:
         # SDD Candidate Quality Judge evaluation
         from sdd.judges.verification_judges import NotificationPolicyJudge
         if not NotificationPolicyJudge.can_notify_telegram("black_hole", candidate_info):
-            # Silenciar y salir de acuerdo al veredicto del juez SDD
             return
 
-        # Descarte explícito de falsos positivos o datos insuficientes
-        if not is_candidate or "FALSO POSITIVO" in verdict or "DISCARDED" in verdict or "DOES NOT MEET" in verdict or "NO DATA" in verdict or "ERROR" in verdict:
-            # Silenciar y salir inmediatamente
+        # Explicit rejection of false positives or insufficient data
+        if not is_candidate or "FALSE POSITIVE" in verdict or "FALSO POSITIVO" in verdict or "DISCARDED" in verdict or "DOES NOT MEET" in verdict or "NO DATA" in verdict or "ERROR" in verdict:
             return
 
         timestamp = datetime.utcnow().isoformat() + "Z"
@@ -48,13 +46,13 @@ class AlertNotifier:
         ra = candidate_info.get("ra") or tic_info.get("ra")
         dec = candidate_info.get("dec") or tic_info.get("dec")
 
-        verdict = assessment.get("verdict", "Posible firma anómala de agujero negro")
+        verdict = assessment.get("verdict", "Possible anomalous black hole signature")
         confidence = assessment.get("confidence", "Moderate")
         det_type = detection.get("type", "Unknown")
 
         metrics = {k: v for k, v in detection.items() if k != "model_flux"}
         
-        # Extraer criterios cumplidos en formato de lista para el frontend
+        # Extract satisfied criteria as a list for the frontend
         criteria_list = []
         if det_type == "Microlensing (Paczynski)":
             criteria_list.append(f"Paczyński (1986) Microlensing: Non-linear fit with Δχ² = {metrics.get('delta_chi2', 0):.1f} (Threshold ≥ 150.0).")
@@ -69,7 +67,7 @@ class AlertNotifier:
             criteria_list.append(f"Tidal Distortion Amplitude: Amp = {metrics.get('amplitude_percent', 0):.2f}% (Range 1.2% - 12.0%).")
             criteria_list.append(f"Tolman-Oppenheimer-Volkoff Bound: Estimated compact companion mass = {metrics.get('estimated_compact_mass_msun', 0):.1f} M_☉ (> 3.0 M_☉).")
 
-        # Criterios oficiales y de auto-verificación
+        # Official and auto-verification criteria
         criteria_list.append("Official Cross-Match: No previous black hole or confirmed exoplanet record in SIMBAD/MAST.")
         auto_ver = candidate_info.get("auto_verification") or assessment.get("auto_verification")
         if auto_ver and auto_ver.get("tests"):
@@ -98,34 +96,34 @@ class AlertNotifier:
             "report_path": candidate_info.get("report_path")
         }
 
-        # 1. Registrar en archivo de bitácora de alertas (JSON Lines persistente)
+        # 1. Log to persistent alert feed (JSON Lines)
         with open(self.alerts_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(alert_entry, ensure_ascii=False) + "\n")
 
-        # 2. Formatear y mostrar en consola con máxima visibilidad
+        # 2. Format and display in console with maximum visibility
         print("\n" + "!" * 70)
-        print(f"🚨 [ALERTA DISPARADA] NUEVO CANDIDATO TENTATIVO A AGUJERO NEGRO")
-        print(f"🎯 Objetivo: {target_id} | Nivel de Confianza: {confidence}")
-        print(f"🔬 Firma Astrofísica: {det_type}")
-        print(f"📝 Veredicto: {verdict}")
+        print(f"[ALERT TRIGGERED] NEW TENTATIVE BLACK HOLE CANDIDATE")
+        print(f"Target: {target_id} | Confidence Level: {confidence}")
+        print(f"Astrophysical Signature: {det_type}")
+        print(f"Verdict: {verdict}")
         auto_ver = candidate_info.get("auto_verification") or assessment.get("auto_verification")
         if auto_ver:
-            print(f"🛡️  Verificación Automática: Score {auto_ver.get('final_score')}/100 [{auto_ver.get('status')}]")
+            print(f"Auto-Verification: Score {auto_ver.get('final_score')}/100 [{auto_ver.get('status')}]")
             print(f"   {auto_ver.get('verdict')}")
         if det_type == "Microlensing (Paczynski)":
-            print(f"📊 Parámetros: tE={detection.get('tE_days', 0):.1f} días, A_max={detection.get('peak_magnification', 0):.2f}, Δchi2={detection.get('delta_chi2', 0):.1f}")
+            print(f"Parameters: tE={detection.get('tE_days', 0):.1f} days, A_max={detection.get('peak_magnification', 0):.2f}, delta_chi2={detection.get('delta_chi2', 0):.1f}")
         elif "Ellipsoidal" in det_type:
-            print(f"📊 Parámetros: Período orbital={detection.get('orbital_period_days', 0):.2f} días, SNR={detection.get('snr', 0):.1f}")
-        print(f"📁 Reporte Diagnóstico: {candidate_info.get('report_path')}")
+            print(f"Parameters: Orbital period={detection.get('orbital_period_days', 0):.2f} days, SNR={detection.get('snr', 0):.1f}")
+        print(f"Diagnostic Report: {candidate_info.get('report_path')}")
         print("!" * 70 + "\n")
 
-        # 3. Notificación nativa en macOS (osascript) si está disponible
+        # 3. Native macOS notification (osascript) if available
         self._macos_notification(
-            title=f"🚨 Candidato Agujero Negro ({confidence})",
-            message=f"{target_id}: {det_type} detectado en TESS"
+            title=f"Black Hole Candidate ({confidence})",
+            message=f"{target_id}: {det_type} detected in TESS"
         )
 
-        # 4. Enviar Webhook a Discord / Slack / Telegram si está configurado
+        # 4. Send Webhook to Discord / Slack / Telegram if configured
         self._send_webhook(alert_entry)
 
         # 5. Send Telegram alert
@@ -164,7 +162,7 @@ class AlertNotifier:
             print(f"[Notifier] Telegram dispatch error: {e}")
 
     def _send_webhook(self, alert_entry: Dict[str, Any]):
-        """Envía alerta con formato enriquecido a Discord o Slack."""
+        """Send enriched alert to Discord or Slack."""
         webhook_url = self.webhook_url or os.getenv("BH_ALERT_WEBHOOK_URL")
         if not webhook_url:
             return
@@ -177,17 +175,16 @@ class AlertNotifier:
             dec = alert_entry.get("dec")
             verdict = alert_entry.get("verdict")
 
-            # Formato universal compatible con Discord Embeds / Slack Block Kit
             payload = {
-                "content": f"🚨 **NUEVO CANDIDATO A AGUJERO NEGRO EN TESS**",
+                "content": f"**NEW TESS BLACK HOLE CANDIDATE**",
                 "embeds": [{
-                    "title": f"★ {target} ({det_type})",
+                    "title": f"{target} ({det_type})",
                     "description": verdict,
-                    "color": 16724582, # Rojo
+                    "color": 16724582,
                     "fields": [
-                        {"name": "📍 Coordenadas Celestes", "value": f"RA: {ra}° | DEC: {dec}°", "inline": True},
-                        {"name": "🔬 Nivel de Confianza", "value": alert_entry.get("confidence", "High"), "inline": True},
-                        {"name": "⏱ Timestamp", "value": alert_entry.get("timestamp"), "inline": False}
+                        {"name": "Celestial Coordinates", "value": f"RA: {ra} | DEC: {dec}", "inline": True},
+                        {"name": "Confidence Level", "value": alert_entry.get("confidence", "High"), "inline": True},
+                        {"name": "Timestamp", "value": alert_entry.get("timestamp"), "inline": False}
                     ]
                 }]
             }

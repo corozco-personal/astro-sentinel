@@ -1,9 +1,9 @@
 """
-Módulo de Calibración y Benchmark con Catálogo de Agujeros Negros Confirmados.
-Permite evaluar y calibrar la sensibilidad de los métodos de detección física:
-1. Modulación elipsoidal y modelo gravitacional de Morris (1985)
-2. Microlente gravitatoria relativista (Paczyński 1986)
-3. Pulsos de auto-lente gravitatorio (Self-lensing)
+Calibration and Benchmark Module with Confirmed Black Hole Catalog.
+Evaluates and calibrates detection method sensitivity:
+1. Ellipsoidal modulation and Morris (1985) gravitational model
+2. Relativistic gravitational microlensing (Paczyński 1986)
+3. Gravitational self-lensing pulses
 """
 from typing import Dict, Any, List
 from pipeline.official_catalogs import OFFICIAL_BLACK_HOLE_REGISTRY
@@ -104,26 +104,25 @@ CONFIRMED_BLACK_HOLES_BENCHMARK = [
 ]
 
 def get_benchmark_catalog() -> List[Dict[str, Any]]:
-    """Devuelve la lista curada de agujeros negros confirmados con metadatos para calibración."""
+    """Return curated list of confirmed black holes with metadata for calibration."""
     return CONFIRMED_BLACK_HOLES_BENCHMARK
 
 
 def calibrate_target(target_id: str, sector: int = 14) -> Dict[str, Any]:
     """
-    Ejecuta calibración de métodos de detección sobre un agujero negro confirmado del catálogo.
+    Run detection method calibration on a confirmed black hole from the catalog.
     """
     from pipeline.pipeline import BlackHolePipeline
     import lightkurve as lk
-    
-    # Encontrar metadatos en el catálogo benchmark
+
     match = None
     for item in CONFIRMED_BLACK_HOLES_BENCHMARK:
         if item["id"] == target_id or item["tic_id"] == target_id or item["name"] == target_id:
             match = item
             break
-            
+
     if not match:
-        return {"success": False, "error": f"Objetivo {target_id} no encontrado en el catálogo benchmark."}
+        return {"success": False, "error": f"Target {target_id} not found in benchmark catalog."}
 
     tic = match["tic_id"]
     star_m = match.get("primary_mass_msun", 1.0)
@@ -140,11 +139,10 @@ def calibrate_target(target_id: str, sector: int = 14) -> Dict[str, Any]:
     }
 
     try:
-        # Descargar curva de luz TESS si existe
         search = lk.search_lightcurve(tic, sector=sector)
         if len(search) == 0:
             search = lk.search_lightcurve(tic)
-            
+
         if len(search) > 0:
             lc = search[0].download().remove_nans().normalize()
             from pipeline.detectors.ellipsoidal import EllipsoidalDetector
@@ -166,4 +164,3 @@ def calibrate_target(target_id: str, sector: int = 14) -> Dict[str, Any]:
         results["success"] = False
 
     return results
-

@@ -1,8 +1,8 @@
 """
-Módulo de correlación cruzada (Cross-Match) para verificación y descarte.
-Consulta el censo oficial de agujeros negros (BlackCAT, Gaia, WATCHDOG),
-el catálogo TIC de MAST, NASA Exoplanet Archive (Planetas Confirmados y TOI Candidates)
-y bases de datos astrométricas para descartar exhaustivamente falsos positivos.
+Cross-Match module for verification and rejection.
+Queries the official black hole census (BlackCAT, Gaia, WATCHDOG),
+the MAST TIC catalog, NASA Exoplanet Archive (Confirmed Planets and TOI Candidates)
+and astrometric databases to exhaustively reject false positives.
 """
 from typing import Dict, Any, Optional
 import warnings
@@ -19,11 +19,11 @@ class CatalogCrossMatcher:
 
     def check_simbad_and_mast(self, identifier: str, coord: Optional[SkyCoord] = None) -> Dict[str, Any]:
         """
-        Consulta fuentes astronómicas oficiales:
-        1. Catálogo Oficial Mundial de Agujeros Negros (BlackCAT / Gaia / WATCHDOG).
-        2. NASA Exoplanet Archive: Planetas Confirmados.
-        3. NASA Exoplanet Archive: Tabla Oficial de TESS Objects of Interest (TOI).
-        4. Catálogo TIC de MAST (stellar parameters).
+        Query official astronomical sources:
+        1. Official World Black Hole Catalog (BlackCAT / Gaia / WATCHDOG).
+        2. NASA Exoplanet Archive: Confirmed Planets.
+        3. NASA Exoplanet Archive: Official TESS Objects of Interest (TOI) table.
+        4. MAST TIC catalog (stellar parameters).
         """
         clean_id = identifier.upper().strip()
         result = {
@@ -42,16 +42,16 @@ class CatalogCrossMatcher:
             "raw_otype": None
         }
 
-        # 1. Comprobación contra el censo oficial de agujeros negros documentados
+        # 1. Check against official documented black hole census
         bh_check = is_officially_documented_black_hole(identifier)
         if bh_check.get("is_documented"):
             result["is_known_object"] = True
             result["is_documented_black_hole"] = True
-            result["object_type"] = f"Agujero Negro Documentado Oficialmente ({bh_check.get('official_name')})"
+            result["object_type"] = f"Officially Documented Black Hole ({bh_check.get('official_name')})"
             result["documented_details"] = bh_check
             return result
 
-        # 2. Comprobación en NASA Exoplanet Archive: Planetas Confirmados
+        # 2. Check NASA Exoplanet Archive: Confirmed Planets
         try:
             exo_table = NasaExoplanetArchive.query_criteria(
                 table="pscomppars",
@@ -60,13 +60,13 @@ class CatalogCrossMatcher:
             if exo_table is not None and len(exo_table) > 0:
                 result["is_known_object"] = True
                 result["is_exoplanet_host"] = True
-                result["object_type"] = f"Sistema Exoplanetario Confirmado ({exo_table['pl_name'][0]})"
+                result["object_type"] = f"Confirmed Exoplanetary System ({exo_table['pl_name'][0]})"
                 return result
         except Exception:
             pass
 
-        # 3. Comprobación en NASA Exoplanet Archive: TESS Objects of Interest (TOI)
-        # Permite identificar si TESS ya lo tiene marcado como falso positivo, binaria eclipsante o candidato planetario
+        # 3. Check NASA Exoplanet Archive: TESS Objects of Interest (TOI)
+        # Identifies if TESS already flagged it as false positive, eclipsing binary or planet candidate
         try:
             clean_tic = clean_id.replace("TIC", "").strip()
             if clean_tic.isdigit():
@@ -81,13 +81,13 @@ class CatalogCrossMatcher:
                     result["is_toi_candidate"] = True
                     if disp in ["EB", "V", "SB1", "SB2"]:
                         result["is_eclipsing_binary"] = True
-                        result["object_type"] = f"Binaria Eclipsante / Variable TOI ({row.get('toidisplay', '')} - {disp})"
+                        result["object_type"] = f"Eclipsing Binary / Variable TOI ({row.get('toidisplay', '')} - {disp})"
                     else:
                         result["object_type"] = f"TESS TOI Candidate ({row.get('toidisplay', '')} - {disp})"
         except Exception:
             pass
 
-        # 4. Comprobación en catálogo TIC de MAST
+        # 4. Check MAST TIC catalog
         try:
             clean_tic = clean_id.replace("TIC", "").strip()
             if clean_tic.isdigit():
@@ -104,8 +104,8 @@ class CatalogCrossMatcher:
                         "rad": float(row["rad"]) if "rad" in row.colnames and row["rad"] else None,
                         "mass": float(row["mass"]) if "mass" in row.colnames and row["mass"] else None
                     }
-                    
-                    # Re-verificar contra catálogo de agujeros negros por coordenadas exactas
+
+                    # Re-verify against black hole catalog by exact coordinates
                     if result["tic_info"]["ra"] and result["tic_info"]["dec"]:
                         bh_coord_check = is_officially_documented_black_hole(
                             identifier,
@@ -114,13 +114,13 @@ class CatalogCrossMatcher:
                         )
                         if bh_coord_check.get("is_documented"):
                             result["is_documented_black_hole"] = True
-                            result["object_type"] = f"Agujero Negro Documentado ({bh_coord_check.get('official_name')})"
+                            result["object_type"] = f"Documented Black Hole ({bh_coord_check.get('official_name')})"
                             result["documented_details"] = bh_coord_check
                             return result
 
-                        # Veto de Contaminación de Apertura (Aperture Blending Veto)
-                        # El píxel de TESS abarca 21 arcsec. Si hay otra estrella en un radio de 25 arcsec
-                        # con brillo significativo, descarta falsos positivos por mezcla fotométrica.
+                        # Aperture Blending Veto
+                        # TESS pixel spans 21 arcsec. If another star within 25 arcsec
+                        # has significant brightness, reject false positives from photometric blending.
                         blending = self._check_aperture_blending(
                             result["tic_info"]["ra"],
                             result["tic_info"]["dec"],
@@ -130,19 +130,19 @@ class CatalogCrossMatcher:
                         if blending.get("is_blended"):
                             result["is_blended_binary"] = True
                             result["blending_details"] = blending
-                    
+
                     return result
         except Exception:
             pass
 
         if not result["is_known_object"]:
-            result["object_type"] = "Objetivo No Catalogado / Fuera de Catálogo"
+            result["object_type"] = "Uncataloged Target"
         return result
 
     def _check_aperture_blending(self, ra: float, dec: float, tmag: Optional[float], target_id: str) -> Dict[str, Any]:
         """
-        Detecta estrellas vecinas dentro de la apertura fotométrica de TESS (radio 25 arcsec)
-        que contaminen el flujo de la estrella objetivo.
+        Detect neighboring stars within the TESS photometric aperture (25 arcsec radius)
+        that contaminate the target star's flux.
         """
         try:
             from astropy.coordinates import SkyCoord
@@ -157,7 +157,7 @@ class CatalogCrossMatcher:
             for row in nearby:
                 row_id = str(row["ID"]).strip()
                 if row_id == clean_target_num:
-                    continue  # Misma estrella
+                    continue
 
                 row_ra = float(row["ra"])
                 row_dec = float(row["dec"])
@@ -184,51 +184,51 @@ class CatalogCrossMatcher:
 
     def assess_undocumented_bh_potential(self, cross_match_data: Dict[str, Any], detector_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Determina si el candidato representa una anomalía NO documentada en fuentes oficiales
-        y descarta rigurosamente falsos positivos (EB, tránsitos exoplanetarios y BHs conocidos).
+        Determine whether the candidate represents an anomaly NOT documented in official sources
+        and rigorously reject false positives (EB, exoplanet transits, and known BHs).
         """
-        # Si ya es un agujero negro catalogado
+        # Already a cataloged black hole
         if cross_match_data.get("is_documented_black_hole"):
             details = cross_match_data.get("documented_details", {})
-            name = details.get("official_name", "Catálogo Oficial")
+            name = details.get("official_name", "Official Catalog")
             return {
                 "undocumented_candidate": False,
                 "confidence": "None",
-                "verdict": f"DESCARTADO POR DOCUMENTACIÓN PREVIA: Corresponde al agujero negro ya catalogado '{name}'."
+                "verdict": f"REJECTED BY PRIOR DOCUMENTATION: Corresponds to already cataloged black hole '{name}'."
             }
 
-        # Si ya es una binaria eclipsante o variable estelar catalogada en TOI/VSX
+        # Already a cataloged eclipsing binary or variable star in TOI/VSX
         if cross_match_data.get("is_eclipsing_binary"):
             return {
                 "undocumented_candidate": False,
                 "confidence": "None",
-                "verdict": f"FALSO POSITIVO DESCARTADO: Objeto catalogado previamente como binaria eclipsante/variable ({cross_match_data.get('object_type')})."
+                "verdict": f"FALSE POSITIVE REJECTED: Object previously cataloged as eclipsing binary/variable ({cross_match_data.get('object_type')})."
             }
 
-        # Si es un planeta confirmado
+        # Confirmed planet
         if cross_match_data.get("is_exoplanet_host"):
             return {
                 "undocumented_candidate": False,
                 "confidence": "None",
-                "verdict": f"FALSO POSITIVO DESCARTADO: Tránsito exoplanetario confirmado ({cross_match_data.get('object_type')})."
+                "verdict": f"FALSE POSITIVE REJECTED: Confirmed exoplanetary transit ({cross_match_data.get('object_type')})."
             }
 
-        # Veto de contaminación por binaria visual / mezcla en píxel TESS (Blending Veto)
+        # Aperture contamination veto (visual binary / TESS pixel blending)
         if cross_match_data.get("is_blended_binary"):
             b_info = cross_match_data.get("blending_details", {})
             return {
                 "undocumented_candidate": False,
                 "confidence": "None",
-                "verdict": f"FALSO POSITIVO DESCARTADO POR CONTAMINACIÓN DE APERTURA: {b_info.get('reason')}"
+                "verdict": f"FALSE POSITIVE REJECTED BY APERTURE CONTAMINATION: {b_info.get('reason')}"
             }
 
-        # Si el detector disparó y superó todas las pruebas físicas
+        # Detector triggered and passed all physical tests
         if detector_result.get("is_candidate"):
             det_type = detector_result.get("type")
             return {
                 "undocumented_candidate": True,
                 "confidence": "High",
-                "verdict": f"¡CANDIDATO NO CATALOGADO DETECTADO! Firma compatible con Agujero Negro ({det_type}) sin registro previo en ningún catálogo oficial."
+                "verdict": f"UNCATALOGED CANDIDATE DETECTED! Signature consistent with Black Hole ({det_type}) with no prior record in any official catalog."
             }
 
         return {
@@ -236,4 +236,3 @@ class CatalogCrossMatcher:
             "confidence": "None",
             "verdict": "Does not meet sufficient statistical black hole criteria."
         }
-

@@ -1,7 +1,7 @@
 """
-Módulo de Control de Falsos Descubrimientos (FDR) y Corrección de Sistemáticas TESS.
-1. Benjamini-Hochberg FDR para controlar la probabilidad de falso positivo en búsquedas masivas.
-2. Limpieza de sistemáticas térmicas de la nave TESS (splines / cotrending / median filter).
+False Discovery Rate (FDR) Control and TESS Systematics Correction.
+1. Benjamini-Hochberg FDR to control false positive probability in massive searches.
+2. TESS spacecraft thermal systematics cleanup (splines / cotrending / median filter).
 """
 from typing import Dict, Any, List
 import numpy as np
@@ -14,11 +14,10 @@ class StatisticalQualityCorrector:
 
     def remove_systematics(self, lc: lk.LightCurve) -> lk.LightCurve:
         """
-        Elimina tendencias térmicas orbitales de TESS (ciclos de 13.7 días del periastro de la nave)
-        mediante filtrado de mediana deslizante de paso largo para preservar tránsitos y microlentes.
+        Remove TESS orbital thermal trends (13.7-day periapsis cycles)
+        via long-pass sliding median filter to preserve transits and microlensing events.
         """
         try:
-            # Flatten conservador con ventana de 2.5 días para no devorar eventos físicos
             clean_lc = lc.flatten(window_length=201, polyorder=2, niters=3, sigma=3.0)
             return clean_lc
         except Exception:
@@ -26,13 +25,12 @@ class StatisticalQualityCorrector:
 
     def calculate_fdr_pvalue(self, chi2_val: float, dof: int, total_tested_targets: int) -> Dict[str, Any]:
         """
-        Calcula el p-valor canónico y el umbral corregido por Benjamini-Hochberg (1995)
-        para mitigar el look-elsewhere effect en catálogos de cientos de miles de estrellas.
+        Calculate canonical p-value and Benjamini-Hochberg (1995) corrected threshold
+        to mitigate the look-elsewhere effect in catalogs of hundreds of thousands of stars.
         """
         if dof <= 0:
             dof = 100
         p_val = float(1.0 - stats.chi2.cdf(chi2_val, df=dof))
-        # Umbral Benjamini-Hochberg ajustado
         n_stars = max(1, total_tested_targets)
         adjusted_alpha = self.target_fdr / n_stars
         is_statistically_significant = p_val < adjusted_alpha

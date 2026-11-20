@@ -94,11 +94,11 @@ class HistoricalSyncManager:
                             t0_val = tls_res.get("t0_bjd", t_arr[0])
                             d_ppm = tls_res.get("transit_depth_ppm", 0.0)
 
-                            # VETO 1: Odd-Even Depth Test (Descarta Binarias Eclipsantes EBs)
+                            # VETO 1: Odd-Even Depth Test (Rejects Eclipsing Binaries EBs)
                             odd_even = self.exo_pipe.physics_engine.odd_even_depth_veto(
                                 t_arr, flat_f, p_days, t0_val, d_ppm * 1e-6
                             )
-                            # VETO 2: Secondary Eclipse (Descarta estrellas compañeras luminosas)
+                            # VETO 2: Secondary Eclipse (Rejects luminous companion stars)
                             sec_ecl = self.exo_pipe.physics_engine.secondary_eclipse_veto(
                                 t_arr, flat_f, p_days, t0_val
                             )
@@ -179,7 +179,7 @@ class HistoricalSyncManager:
     def run_sync(self, batch_size: int = 50):
         pending = self.get_pending_sync_targets()
         self.total_to_sync = len(pending)
-        print(f"\n[SyncManager] 🔄 Sincronización iniciada: {self.total_to_sync} estrellas históricas pendientes.")
+        print(f"\n[SyncManager] Sync started: {self.total_to_sync} pending historical targets.")
 
         with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="SyncWorker") as executor:
             for i in range(0, len(pending), batch_size):
@@ -192,6 +192,6 @@ class HistoricalSyncManager:
                     res = f.result()
                     if self.processed_in_sync % 10 == 0 or self.processed_in_sync == self.total_to_sync:
                         pct = (self.processed_in_sync / max(1, self.total_to_sync)) * 100
-                        print(f"[SyncManager] Progreso de sincronización: {self.processed_in_sync}/{self.total_to_sync} ({pct:.1f}%)")
+                        print(f"[SyncManager] Sync progress: {self.processed_in_sync}/{self.total_to_sync} ({pct:.1f}%)")
 
-        print("[SyncManager] ✅ Sincronización histórica finalizada exitosamente.")
+        print("[SyncManager] Historical sync completed successfully.")
