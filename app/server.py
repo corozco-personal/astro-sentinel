@@ -405,7 +405,6 @@ def get_status():
                     SELECT patch_id, ra_center, dec_center, radius_deg, stars_evaluated, candidates_found, status, started_at
                     FROM surveyed_sky_patches
                     ORDER BY started_at DESC
-                    LIMIT 50
                 """)
                 surveyed_patches = [dict(r) for r in cur.fetchall()]
         except Exception:

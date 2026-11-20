@@ -908,6 +908,10 @@
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><circle cx="12" cy="12" r="3" fill="currentColor"></circle></svg>
               <span>Center Active Area</span>
             </button>
+            <button class="btn-eye-toggle active" id="btn-coverage-toggle" onclick="toggleCoverageMode()" style="padding: 4px 10px; font-size: 0.75rem; border-color: #34d399; color: #34d399;" title="Toggle between showing only the active scan area or all surveyed patches">
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+              <span id="coverage-toggle-text">Coverage: All</span>
+            </button>
           </div>
           <div class="sky-legend">
             <div class="legend-item">
@@ -915,6 +919,18 @@
                 <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#ff3366" stroke-width="2" fill="none"></circle><circle cx="12" cy="12" r="4" fill="#ff3366"></circle></svg>
               </span>
               <span id="map-legend-label">Candidates</span>
+            </div>
+            <div class="legend-item">
+              <span style="display: flex; align-items: center;">
+                <svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#34d399" stroke-width="2" fill="rgba(52,211,153,0.15)"></circle></svg>
+              </span>
+              <span>Surveyed</span>
+            </div>
+            <div class="legend-item">
+              <span style="display: flex; align-items: center;">
+                <svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#00f2fe" stroke-width="2" fill="none"></circle></svg>
+              </span>
+              <span>Active</span>
             </div>
           </div>
         </div>
@@ -1145,6 +1161,8 @@
     let aladinInstance = null;
     let liveLayer = null;
     let candidateLayer = null;
+    let coverageShowAll = true;
+    let completedOverlay = null;
     let currentLiveTarget = null;
     let previousAlertsFingerprint = "";
     let previousExoFingerprint = "";
@@ -1170,12 +1188,14 @@
 
         candidateLayer = A.catalog({ name: "Candidates", sourceSize: 18, color: "#ff3366", shape: "rhomb" });
         patchLayer = A.catalog({ name: "Surveyed Patches", sourceSize: 12, color: "#00f2fe", shape: "circle" });
-        footprintOverlay = A.graphicOverlay({ name: "Coverage Radar Footprints", color: "rgba(0, 242, 254, 0.25)", lineWidth: 1.5 });
+        footprintOverlay = A.graphicOverlay({ name: "Active Patch", color: "rgba(0, 242, 254, 0.25)", lineWidth: 1.5 });
+        completedOverlay = A.graphicOverlay({ name: "Surveyed Areas", color: "rgba(52, 211, 153, 0.15)", lineWidth: 1 });
         liveLayer = A.catalog({ name: "Selected Star", sourceSize: 16, color: "#00f2fe", shape: "circle" });
 
         aladinInstance.addCatalog(candidateLayer);
         aladinInstance.addCatalog(liveLayer);
         aladinInstance.addCatalog(patchLayer);
+        aladinInstance.addOverlay(completedOverlay);
         aladinInstance.addOverlay(footprintOverlay);
       } catch (e) {
         console.error("Error initializing Aladin Lite:", e);
@@ -1184,6 +1204,73 @@
 
     let isReticleActive = true;
     let isGridActive = false;
+    let cachedSurveyedPatches = [];
+
+    function toggleCoverageMode() {
+      coverageShowAll = !coverageShowAll;
+      const btn = document.getElementById('btn-coverage-toggle');
+      const text = document.getElementById('coverage-toggle-text');
+      if (btn) {
+        btn.classList.toggle('active', coverageShowAll);
+        btn.style.borderColor = coverageShowAll ? '#34d399' : 'var(--border)';
+        btn.style.color = coverageShowAll ? '#34d399' : 'var(--text-muted)';
+      }
+      if (text) text.innerText = coverageShowAll ? 'Coverage: All' : 'Coverage: Current';
+      renderSurveyedPatches(cachedSurveyedPatches);
+    }
+
+    function renderSurveyedPatches(patches) {
+      if (!aladinInstance || !footprintOverlay) return;
+      cachedSurveyedPatches = patches;
+
+      patchLayer.removeAll();
+      footprintOverlay.removeAll();
+      if (completedOverlay) completedOverlay.removeAll();
+
+      if (!patches || patches.length === 0) return;
+
+      const activePatch = patches.find(p => p.status === 'IN_PROGRESS') || patches[0];
+
+      if (coverageShowAll) {
+        // Draw all completed patches as green filled circles
+        patches.forEach(p => {
+          if (p.status === 'COMPLETED' && completedOverlay && typeof A.circle === 'function') {
+            try {
+              completedOverlay.add(A.circle(p.ra_center, p.dec_center, p.radius_deg, {
+                color: '#34d399', fill: true, fillColor: 'rgba(52, 211, 153, 0.12)', lineWidth: 1
+              }));
+            } catch(e) {}
+          }
+        });
+
+        // Draw in-progress patches as cyan outline
+        patches.forEach(p => {
+          if (p.status === 'IN_PROGRESS' && typeof A.circle === 'function') {
+            try {
+              footprintOverlay.add(A.circle(p.ra_center, p.dec_center, p.radius_deg, {
+                color: '#00f2fe', fill: false, lineWidth: 2
+              }));
+            } catch(e) {}
+          }
+        });
+      }
+
+      // Always draw the active patch marker
+      if (activePatch) {
+        patchLayer.addSources([A.marker(activePatch.ra_center, activePatch.dec_center, {
+          popupTitle: 'Active Sky Patch: ' + activePatch.patch_id,
+          popupDesc: 'Center: (' + activePatch.ra_center.toFixed(2) + '°, ' + activePatch.dec_center.toFixed(2) + '°)<br>Radius: ' + activePatch.radius_deg + '°<br>Stars: ' + (activePatch.stars_evaluated || 0)
+        })]);
+
+        if (!coverageShowAll && typeof A.circle === 'function') {
+          try {
+            footprintOverlay.add(A.circle(activePatch.ra_center, activePatch.dec_center, activePatch.radius_deg, {
+              color: '#00f2fe', fill: false, lineWidth: 2
+            }));
+          } catch(e) {}
+        }
+      }
+    }
 
     function toggleReticle() {
       if (!aladinInstance) return;
@@ -2210,26 +2297,11 @@
         updateMapCandidateMarkers(data);
 
         // ALADIN LITE: RENDER SURVEYED SKY PATCHES
-        if (aladinInstance && patchLayer && data.surveyed_patches && data.surveyed_patches.length > 0) {
-          if (patchLayer.sources.length !== data.surveyed_patches.length) {
-            patchLayer.removeAll();
-            if (footprintOverlay) footprintOverlay.removeAll();
-
-            // OPTION 1: Draw ONLY the single active patch currently being scanned
-            const activePatch = data.surveyed_patches.find(p => p.status === 'IN_PROGRESS') || data.surveyed_patches[0];
-            if (activePatch) {
-              patchLayer.addSources([A.marker(activePatch.ra_center, activePatch.dec_center, {
-                popupTitle: `Active Sky Patch: ${activePatch.patch_id}`,
-                popupDesc: `Center: (${activePatch.ra_center.toFixed(2)}°, ${activePatch.dec_center.toFixed(2)}°)<br>Radius: ${activePatch.radius_deg}°<br>Status: ${activePatch.status}`
-              })]);
-
-              if (footprintOverlay && typeof A.circle === 'function') {
-                try {
-                  const circle = A.circle(activePatch.ra_center, activePatch.dec_center, activePatch.radius_deg, { color: '#00f2fe', fill: false, lineWidth: 2 });
-                  footprintOverlay.add(circle);
-                } catch(e) {}
-              }
-            }
+        if (data.surveyed_patches && data.surveyed_patches.length > 0) {
+          const patchFingerprint = data.surveyed_patches.length + '_' + (data.surveyed_patches[0] || {}).status;
+          if (patchFingerprint !== window._lastPatchFingerprint) {
+            window._lastPatchFingerprint = patchFingerprint;
+            renderSurveyedPatches(data.surveyed_patches);
           }
         }
 
