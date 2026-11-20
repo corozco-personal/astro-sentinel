@@ -8,7 +8,6 @@ en línea los archivos astrométricos, espectroscópicos y de altas energías:
 4. Estimación del Límite de Masa Dinámica (M_min > 3.0 M_sun de Oppenheimer-Volkoff).
 """
 from typing import Dict, Any, Optional
-import math
 import warnings
 from astropy.coordinates import SkyCoord
 import astropy.units as u

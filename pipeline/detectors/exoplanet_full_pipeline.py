@@ -165,7 +165,8 @@ class ExoplanetPipeline:
         match_res = {}
         is_already_known = False
         if t_ra is not None and t_dec is not None:
-            match_res = self.cross_matcher.match_coordinates(t_ra, t_dec, target_id=target_id)
+            coord = SkyCoord(ra=t_ra, dec=t_dec, unit="deg")
+            match_res = self.cross_matcher.check_simbad_and_mast(target_id, coord=coord)
             if match_res.get("is_known_exoplanet", False) or match_res.get("is_toi_candidate", False):
                 is_already_known = True
         result["simbad_info"] = match_res

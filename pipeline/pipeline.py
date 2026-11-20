@@ -5,8 +5,6 @@ descarte cruzado con SIMBAD/catálogos oficiales y generación de reportes.
 """
 from pathlib import Path
 from typing import Dict, Any, Optional
-import lightkurve as lk
-
 from config import PipelineConfig, OUTPUT_DIR
 from pipeline.tess_client import TESSClient
 from pipeline.detectors.microlensing import MicrolensingDetector

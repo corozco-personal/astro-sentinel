@@ -128,11 +128,11 @@ class AlertNotifier:
         # 4. Enviar Webhook a Discord / Slack / Telegram si está configurado
         self._send_webhook(alert_entry)
 
-        # 5. Enviar mensaje de alerta a Telegram del usuario (@corozco9408)
+        # 5. Send Telegram alert
         self._send_telegram_alert(alert_entry)
 
     def _send_telegram_alert(self, alert_entry: Dict[str, Any]):
-        """Envía alerta instantánea con sonido y formato al bot de Telegram personal de Carlos."""
+        """Send instant Telegram alert with formatting."""
         token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
 

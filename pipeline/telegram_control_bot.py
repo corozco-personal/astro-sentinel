@@ -1,7 +1,7 @@
 """
 Telegram Bidirectional Control Bot for ASTRO SENTINEL (24/7)
 -----------------------------------------------------------
-Listens for commands from authorized user (Carlos Orozco) via Telegram Long-Polling:
+Listens for commands from the authorized user via Telegram Long-Polling:
 - /start or /help : Displays available commands and sentinel status
 - /status        : Returns real-time observatory metrics (patches, targets, candidates)
 - /pause         : Pauses the continuous sky scanner
